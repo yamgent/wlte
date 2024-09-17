@@ -1,3 +1,7 @@
+mod app;
+
+use app::App;
+
 pub fn run() {
-    println!("Hello, world!");
+    App::new().run().expect("Fatal app error");
 }
