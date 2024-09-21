@@ -1,5 +1,12 @@
 use anyhow::Result;
-use std::sync::Arc;
+use std::{num::NonZeroUsize, sync::Arc};
+use vello::{
+    kurbo::Affine,
+    peniko::Color,
+    util::{RenderContext, RenderSurface},
+    wgpu::{Maintain, PresentMode},
+    AaConfig, AaSupport, RenderParams, Renderer, RendererOptions, Scene,
+};
 use winit::{
     application::ApplicationHandler,
     dpi::LogicalSize,
@@ -8,7 +15,9 @@ use winit::{
     window::{Window, WindowId},
 };
 
-struct ActiveAppState {
+struct ActiveAppState<'s> {
+    // surface field is before the window field, so that surface is dropped before window
+    surface: RenderSurface<'s>,
     window: Arc<Window>,
 }
 
@@ -16,13 +25,18 @@ struct SuspendedAppState {
     cached_window: Option<Arc<Window>>,
 }
 
-enum AppState {
-    Active(ActiveAppState),
+enum AppState<'s> {
+    Active(ActiveAppState<'s>),
     Suspended(SuspendedAppState),
 }
 
-pub struct App {
-    app_state: AppState,
+pub struct App<'s> {
+    context: RenderContext,
+    renderers: Vec<Option<Renderer>>,
+    app_state: AppState<'s>,
+    // reuse scene every frame, so that we don't spend resources
+    // recreating it every frame
+    scene: Scene,
 }
 
 fn create_winit_window(event_loop: &ActiveEventLoop) -> Arc<Window> {
@@ -33,7 +47,20 @@ fn create_winit_window(event_loop: &ActiveEventLoop) -> Arc<Window> {
     Arc::new(event_loop.create_window(attr).unwrap())
 }
 
-impl ApplicationHandler for App {
+fn create_vello_renderer(context: &RenderContext, surface: &RenderSurface) -> Renderer {
+    Renderer::new(
+        &context.devices[surface.dev_id].device,
+        RendererOptions {
+            surface_format: Some(surface.format),
+            use_cpu: false,
+            antialiasing_support: AaSupport::all(),
+            num_init_threads: NonZeroUsize::new(1),
+        },
+    )
+    .expect("couldn't create renderer")
+}
+
+impl<'s> ApplicationHandler for App<'s> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let AppState::Suspended(SuspendedAppState { cached_window }) = &mut self.app_state else {
             return;
@@ -43,32 +70,113 @@ impl ApplicationHandler for App {
             .take()
             .unwrap_or_else(|| create_winit_window(event_loop));
 
-        // TODO: Rendering
+        let surface = self.create_vello_surface(&window);
 
-        self.app_state = AppState::Active(ActiveAppState { window });
+        self.renderers
+            .resize_with(self.context.devices.len(), || None);
+        self.renderers[surface.dev_id]
+            .get_or_insert_with(|| create_vello_renderer(&self.context, &surface));
+
+        self.app_state = AppState::Active(ActiveAppState { window, surface });
+    }
+
+    fn suspended(&mut self, _event_loop: &ActiveEventLoop) {
+        if let AppState::Active(ActiveAppState { window, .. }) = &self.app_state {
+            self.app_state = AppState::Suspended(SuspendedAppState {
+                cached_window: Some(window.clone()),
+            });
+        }
     }
 
     fn window_event(
         &mut self,
         event_loop: &ActiveEventLoop,
-        _window_id: WindowId,
+        window_id: WindowId,
         event: WindowEvent,
     ) {
-        // TODO: Rendering
+        // only handle event if it is our window, and we are in active state
+        let active_state = match &mut self.app_state {
+            AppState::Active(state) if state.window.id() == window_id => state,
+            _ => return,
+        };
 
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
+            WindowEvent::Resized(size) => {
+                self.context
+                    .resize_surface(&mut active_state.surface, size.width, size.height);
+            }
+            WindowEvent::RedrawRequested => {
+                self.scene.reset();
+
+                // TODO: Actual drawing
+                self.scene.stroke(
+                    &vello::kurbo::Stroke::new(6.0),
+                    Affine::IDENTITY,
+                    Color::rgb(0.8, 0.8, 0.8),
+                    None,
+                    &vello::kurbo::Line::new((100.0, 20.0), (400.0, 50.0)),
+                );
+
+                let surface = &active_state.surface;
+
+                let width = surface.config.width;
+                let height = surface.config.height;
+                let device_handle = &self.context.devices[surface.dev_id];
+
+                let surface_texture = surface
+                    .surface
+                    .get_current_texture()
+                    .expect("cannot get surface texture");
+
+                self.renderers[surface.dev_id]
+                    .as_mut()
+                    .unwrap()
+                    .render_to_surface(
+                        &device_handle.device,
+                        &device_handle.queue,
+                        &self.scene,
+                        &surface_texture,
+                        &RenderParams {
+                            base_color: Color::BLACK,
+                            width,
+                            height,
+                            antialiasing_method: AaConfig::Msaa16,
+                        },
+                    )
+                    .expect("failed to render to surface");
+
+                surface_texture.present();
+
+                device_handle.device.poll(Maintain::Poll);
+            }
             _ => {}
         }
     }
 }
 
-impl App {
+impl<'s> App<'s> {
+    fn create_vello_surface(&mut self, window: &Arc<Window>) -> RenderSurface<'s> {
+        let size = window.inner_size();
+        let surface_future = self.context.create_surface(
+            window.clone(),
+            size.width,
+            size.height,
+            PresentMode::AutoVsync,
+        );
+        pollster::block_on(surface_future).expect("error creating surface")
+    }
+}
+
+impl<'a> App<'a> {
     pub fn new() -> Self {
         Self {
+            context: RenderContext::new(),
+            renderers: vec![],
             app_state: AppState::Suspended(SuspendedAppState {
                 cached_window: None,
             }),
+            scene: Scene::new(),
         }
     }
     pub fn run(mut self) -> Result<()> {
