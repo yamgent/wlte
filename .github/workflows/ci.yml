@@ -3,6 +3,8 @@ name: Tests and Lints
 on:
   pull_request:
   push:
+    branches:
+      - main
 
 jobs:
   test:
