@@ -103,8 +103,12 @@ impl<'s> ApplicationHandler for App<'s> {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => {
+                // wgpu may crash if width or height is 0, don't allow that
+                let width = size.width.max(1);
+                let height = size.height.max(1);
+
                 self.context
-                    .resize_surface(&mut active_state.surface, size.width, size.height);
+                    .resize_surface(&mut active_state.surface, width, height);
             }
             WindowEvent::RedrawRequested => {
                 self.scene.reset();
@@ -158,12 +162,14 @@ impl<'s> ApplicationHandler for App<'s> {
 impl<'s> App<'s> {
     fn create_vello_surface(&mut self, window: &Arc<Window>) -> RenderSurface<'s> {
         let size = window.inner_size();
-        let surface_future = self.context.create_surface(
-            window.clone(),
-            size.width,
-            size.height,
-            PresentMode::AutoVsync,
-        );
+
+        // wgpu may crash if width or height is 0, don't allow that
+        let width = size.width.max(1);
+        let height = size.height.max(1);
+
+        let surface_future =
+            self.context
+                .create_surface(window.clone(), width, height, PresentMode::AutoVsync);
         pollster::block_on(surface_future).expect("error creating surface")
     }
 }
