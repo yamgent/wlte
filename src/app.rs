@@ -10,12 +10,18 @@ use crate::base_app::{
     BaseApp, BaseAppEvent, BaseAppLogic, BaseAppRenderer, DrawMonospaceTextOptions,
 };
 
-struct AppLogic;
+struct AppLogic {
+    text: String,
+}
 
 impl BaseAppLogic for AppLogic {
     fn handle_events(&mut self, event: BaseAppEvent) {
         // TODO: Handle events
-        println!("{:?}", event);
+        let BaseAppEvent::KeyboardEvent {
+            event,
+            is_synthetic,
+        } = event;
+        self.text = format!("Event: is_synthetic is {}, rest: {:?}", is_synthetic, event);
     }
 
     fn render(&mut self, renderer: &mut BaseAppRenderer) {
@@ -26,7 +32,7 @@ impl BaseAppLogic for AppLogic {
             glyph_transform: None,
             brush: &Brush::Solid(Color::WHITE).into(),
             style: Fill::NonZero,
-            text: "Hello world!",
+            text: &self.text,
             _marker: PhantomData,
         });
     }
@@ -39,7 +45,9 @@ pub struct App {
 impl App {
     pub fn new() -> Self {
         Self {
-            base_app: BaseApp::new(AppLogic),
+            base_app: BaseApp::new(AppLogic {
+                text: "No events yet!".to_string(),
+            }),
         }
     }
 

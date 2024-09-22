@@ -295,10 +295,13 @@ impl<T: BaseAppLogic> ApplicationHandler for BaseApp<T> {
                 event,
                 is_synthetic,
                 ..
-            } => self.app_logic.handle_events(BaseAppEvent::KeyboardEvent {
-                event,
-                is_synthetic,
-            }),
+            } => {
+                self.app_logic.handle_events(BaseAppEvent::KeyboardEvent {
+                    event,
+                    is_synthetic,
+                });
+                active_state.window.request_redraw();
+            }
             _ => {}
         }
     }
