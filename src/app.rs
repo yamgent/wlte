@@ -1,6 +1,14 @@
-use anyhow::Result;
+use std::marker::PhantomData;
 
-use crate::base_app::{BaseApp, BaseAppEvent, BaseAppLogic, BaseAppRenderer};
+use anyhow::Result;
+use vello::{
+    kurbo::Affine,
+    peniko::{Brush, Color, Fill},
+};
+
+use crate::base_app::{
+    BaseApp, BaseAppEvent, BaseAppLogic, BaseAppRenderer, DrawMonospaceTextOptions,
+};
 
 struct AppLogic;
 
@@ -12,7 +20,15 @@ impl BaseAppLogic for AppLogic {
 
     fn render(&mut self, renderer: &mut BaseAppRenderer) {
         // TODO: Handle rendering
-        renderer.draw_dummy();
+        renderer.draw_monospace_text(DrawMonospaceTextOptions::<&Brush, _, _> {
+            size: 16.0,
+            transform: Affine::translate((30.0, 50.0)),
+            glyph_transform: None,
+            brush: &Brush::Solid(Color::WHITE).into(),
+            style: Fill::NonZero,
+            text: "Hello world!",
+            _marker: PhantomData,
+        });
     }
 }
 

@@ -1,8 +1,12 @@
 use anyhow::Result;
-use std::{num::NonZeroUsize, sync::Arc};
+use std::{fs, marker::PhantomData, num::NonZeroUsize, path::Path, sync::Arc};
 use vello::{
+    glyph::{
+        skrifa::{FontRef, MetadataProvider},
+        Glyph,
+    },
     kurbo::Affine,
-    peniko::Color,
+    peniko::{Blob, BrushRef, Color, Font, StyleRef},
     util::{RenderContext, RenderSurface},
     wgpu::{Maintain, PresentMode},
     AaConfig, AaSupport, RenderParams, Renderer, RendererOptions, Scene,
@@ -46,6 +50,44 @@ pub struct BaseAppRenderer {
     // reuse scene every frame, so that we don't spend resources
     // recreating it every frame
     scene: Scene,
+
+    monospace_font: Font,
+}
+
+fn load_monospace_font() -> Font {
+    let monospace_font_path = if cfg!(windows) {
+        Path::new(r"C:\Windows\Fonts\consola.ttf")
+    } else {
+        panic!("don't know where to find monospace font");
+    };
+
+    let monospace_font_bytes = fs::read(monospace_font_path).expect("fail to load monospace font");
+
+    Font::new(Blob::new(Arc::new(monospace_font_bytes)), 0)
+}
+
+fn to_font_ref(font: &Font) -> Option<FontRef<'_>> {
+    use vello::skrifa::raw::FileRef;
+    let file_ref = FileRef::new(font.data.as_ref()).ok()?;
+    match file_ref {
+        FileRef::Font(font) => Some(font),
+        FileRef::Collection(collection) => collection.get(font.index).ok(),
+    }
+}
+
+pub struct DrawMonospaceTextOptions<'a, B, S, T>
+where
+    B: Into<BrushRef<'a>>,
+    S: Into<StyleRef<'a>>,
+    T: AsRef<str>,
+{
+    pub size: f32,
+    pub transform: Affine,
+    pub glyph_transform: Option<Affine>,
+    pub brush: B,
+    pub style: S,
+    pub text: T,
+    pub _marker: PhantomData<&'a ()>,
 }
 
 impl BaseAppRenderer {
@@ -54,6 +96,7 @@ impl BaseAppRenderer {
             context: RenderContext::new(),
             renderers: vec![],
             scene: Scene::new(),
+            monospace_font: load_monospace_font(),
         }
     }
 
@@ -122,15 +165,56 @@ impl BaseAppRenderer {
         device_handle.device.poll(Maintain::Poll);
     }
 
-    // TODO: Remove dummy method
-    pub fn draw_dummy(&mut self) {
-        self.scene.stroke(
-            &vello::kurbo::Stroke::new(6.0),
-            Affine::IDENTITY,
-            Color::rgb(0.8, 0.8, 0.8),
-            None,
-            &vello::kurbo::Line::new((100.0, 20.0), (400.0, 50.0)),
-        );
+    pub fn draw_monospace_text<'a, B, S, T>(
+        &'a mut self,
+        options: DrawMonospaceTextOptions<'a, B, S, T>,
+    ) where
+        B: Into<BrushRef<'a>>,
+        S: Into<StyleRef<'a>>,
+        T: AsRef<str>,
+    {
+        let font_ref = to_font_ref(&self.monospace_font).expect("cannot get font ref");
+
+        let axes = font_ref.axes();
+        let font_size = vello::skrifa::instance::Size::new(options.size);
+        // TODO: Support customising font axes
+        let variations: &[(&str, f32)] = &[];
+        let var_loc = axes.location(variations.iter().copied());
+        let metrics = font_ref.metrics(font_size, &var_loc);
+        let line_height = metrics.ascent - metrics.descent + metrics.leading;
+        let charmap = font_ref.charmap();
+        let glyph_metrics = font_ref.glyph_metrics(font_size, &var_loc);
+
+        let mut pen_x = 0f32;
+        let mut pen_y = 0f32;
+
+        self.scene
+            .draw_glyphs(&self.monospace_font)
+            .font_size(options.size)
+            .transform(options.transform)
+            .glyph_transform(options.glyph_transform)
+            .brush(options.brush)
+            .hint(false)
+            .draw(
+                options.style,
+                options.text.as_ref().chars().filter_map(|ch| {
+                    if ch == '\n' {
+                        pen_y += line_height;
+                        pen_x = 0.0;
+                        return None;
+                    }
+
+                    let gid = charmap.map(ch).unwrap_or_default();
+                    let advance = glyph_metrics.advance_width(gid).unwrap_or_default();
+                    let x = pen_x;
+                    pen_x += advance;
+                    Some(Glyph {
+                        id: gid.to_u32(),
+                        x,
+                        y: pen_y,
+                    })
+                }),
+            );
     }
 }
 
