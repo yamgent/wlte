@@ -9,7 +9,7 @@ use vello::{
 };
 use winit::{
     application::ApplicationHandler,
-    dpi::LogicalSize,
+    dpi::{LogicalSize, PhysicalSize},
     event::{KeyEvent, WindowEvent},
     event_loop::{ActiveEventLoop, EventLoop},
     window::{Window, WindowId},
@@ -17,7 +17,7 @@ use winit::{
 
 pub trait BaseAppLogic {
     fn handle_events(&mut self, event: BaseAppEvent);
-    fn render(&mut self);
+    fn render(&mut self, renderer: &mut BaseAppRenderer);
 }
 
 #[derive(Debug)]
@@ -40,13 +40,103 @@ enum AppState {
     Suspended(SuspendedAppState),
 }
 
-pub struct BaseApp<T: BaseAppLogic> {
+pub struct BaseAppRenderer {
     context: RenderContext,
     renderers: Vec<Option<Renderer>>,
-    app_state: AppState,
     // reuse scene every frame, so that we don't spend resources
     // recreating it every frame
     scene: Scene,
+}
+
+impl BaseAppRenderer {
+    fn new() -> Self {
+        Self {
+            context: RenderContext::new(),
+            renderers: vec![],
+            scene: Scene::new(),
+        }
+    }
+
+    // our window is backed by an Arc, so we actually can use static lifetime for RenderSurface
+    fn create_vello_surface(&mut self, window: &Arc<Window>) -> RenderSurface<'static> {
+        let size = window.inner_size();
+
+        // wgpu may crash if width or height is 0, don't allow that
+        let width = size.width.max(1);
+        let height = size.height.max(1);
+
+        let surface_future =
+            self.context
+                .create_surface(window.clone(), width, height, PresentMode::AutoVsync);
+        let surface = pollster::block_on(surface_future).expect("error creating surface");
+
+        self.renderers
+            .resize_with(self.context.devices.len(), || None);
+        self.renderers[surface.dev_id]
+            .get_or_insert_with(|| create_vello_renderer(&self.context, &surface));
+
+        surface
+    }
+
+    fn resize_surface(&self, surface: &mut RenderSurface, size: &PhysicalSize<u32>) {
+        // wgpu may crash if width or height is 0, don't allow that
+        let width = size.width.max(1);
+        let height = size.height.max(1);
+
+        self.context.resize_surface(surface, width, height);
+    }
+
+    fn start_new_frame(&mut self) {
+        self.scene.reset();
+    }
+
+    fn present_frame(&mut self, surface: &RenderSurface) {
+        let width = surface.config.width;
+        let height = surface.config.height;
+        let device_handle = &self.context.devices[surface.dev_id];
+
+        let surface_texture = surface
+            .surface
+            .get_current_texture()
+            .expect("cannot get surface texture");
+
+        self.renderers[surface.dev_id]
+            .as_mut()
+            .unwrap()
+            .render_to_surface(
+                &device_handle.device,
+                &device_handle.queue,
+                &self.scene,
+                &surface_texture,
+                &RenderParams {
+                    base_color: Color::BLACK,
+                    width,
+                    height,
+                    antialiasing_method: AaConfig::Msaa16,
+                },
+            )
+            .expect("failed to render to surface");
+
+        surface_texture.present();
+
+        device_handle.device.poll(Maintain::Poll);
+    }
+
+    // TODO: Remove dummy method
+    pub fn draw_dummy(&mut self) {
+        self.scene.stroke(
+            &vello::kurbo::Stroke::new(6.0),
+            Affine::IDENTITY,
+            Color::rgb(0.8, 0.8, 0.8),
+            None,
+            &vello::kurbo::Line::new((100.0, 20.0), (400.0, 50.0)),
+        );
+    }
+}
+
+pub struct BaseApp<T: BaseAppLogic> {
+    app_state: AppState,
+    app_renderer: BaseAppRenderer,
     app_logic: T,
 }
 
@@ -81,12 +171,7 @@ impl<T: BaseAppLogic> ApplicationHandler for BaseApp<T> {
             .take()
             .unwrap_or_else(|| create_winit_window(event_loop));
 
-        let surface = self.create_vello_surface(&window);
-
-        self.renderers
-            .resize_with(self.context.devices.len(), || None);
-        self.renderers[surface.dev_id]
-            .get_or_insert_with(|| create_vello_renderer(&self.context, &surface));
+        let surface = self.app_renderer.create_vello_surface(&window);
 
         self.app_state = AppState::Active(ActiveAppState { window, surface });
     }
@@ -114,58 +199,13 @@ impl<T: BaseAppLogic> ApplicationHandler for BaseApp<T> {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => {
-                // wgpu may crash if width or height is 0, don't allow that
-                let width = size.width.max(1);
-                let height = size.height.max(1);
-
-                self.context
-                    .resize_surface(&mut active_state.surface, width, height);
+                self.app_renderer
+                    .resize_surface(&mut active_state.surface, &size);
             }
             WindowEvent::RedrawRequested => {
-                self.scene.reset();
-
-                self.app_logic.render();
-
-                // TODO: Actual drawing
-                self.scene.stroke(
-                    &vello::kurbo::Stroke::new(6.0),
-                    Affine::IDENTITY,
-                    Color::rgb(0.8, 0.8, 0.8),
-                    None,
-                    &vello::kurbo::Line::new((100.0, 20.0), (400.0, 50.0)),
-                );
-
-                let surface = &active_state.surface;
-
-                let width = surface.config.width;
-                let height = surface.config.height;
-                let device_handle = &self.context.devices[surface.dev_id];
-
-                let surface_texture = surface
-                    .surface
-                    .get_current_texture()
-                    .expect("cannot get surface texture");
-
-                self.renderers[surface.dev_id]
-                    .as_mut()
-                    .unwrap()
-                    .render_to_surface(
-                        &device_handle.device,
-                        &device_handle.queue,
-                        &self.scene,
-                        &surface_texture,
-                        &RenderParams {
-                            base_color: Color::BLACK,
-                            width,
-                            height,
-                            antialiasing_method: AaConfig::Msaa16,
-                        },
-                    )
-                    .expect("failed to render to surface");
-
-                surface_texture.present();
-
-                device_handle.device.poll(Maintain::Poll);
+                self.app_renderer.start_new_frame();
+                self.app_logic.render(&mut self.app_renderer);
+                self.app_renderer.present_frame(&active_state.surface);
             }
             WindowEvent::KeyboardInput {
                 event,
@@ -181,30 +221,12 @@ impl<T: BaseAppLogic> ApplicationHandler for BaseApp<T> {
 }
 
 impl<T: BaseAppLogic> BaseApp<T> {
-    // our window is backed by an Arc, so we actually can use static lifetime for RenderSurface
-    fn create_vello_surface(&mut self, window: &Arc<Window>) -> RenderSurface<'static> {
-        let size = window.inner_size();
-
-        // wgpu may crash if width or height is 0, don't allow that
-        let width = size.width.max(1);
-        let height = size.height.max(1);
-
-        let surface_future =
-            self.context
-                .create_surface(window.clone(), width, height, PresentMode::AutoVsync);
-        pollster::block_on(surface_future).expect("error creating surface")
-    }
-}
-
-impl<T: BaseAppLogic> BaseApp<T> {
     pub fn new(app_logic: T) -> Self {
         Self {
-            context: RenderContext::new(),
-            renderers: vec![],
             app_state: AppState::Suspended(SuspendedAppState {
                 cached_window: None,
             }),
-            scene: Scene::new(),
+            app_renderer: BaseAppRenderer::new(),
             app_logic,
         }
     }

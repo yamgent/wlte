@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use crate::base_app::{BaseApp, BaseAppEvent, BaseAppLogic};
+use crate::base_app::{BaseApp, BaseAppEvent, BaseAppLogic, BaseAppRenderer};
 
 struct AppLogic;
 
@@ -10,9 +10,9 @@ impl BaseAppLogic for AppLogic {
         println!("{:?}", event);
     }
 
-    fn render(&mut self) {
+    fn render(&mut self, renderer: &mut BaseAppRenderer) {
         // TODO: Handle rendering
-        println!("Drawing");
+        renderer.draw_dummy();
     }
 }
 
