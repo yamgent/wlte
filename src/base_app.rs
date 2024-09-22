@@ -25,9 +25,9 @@ pub enum BaseAppEvent {
     KeyboardEvent { event: KeyEvent, is_synthetic: bool },
 }
 
-struct ActiveAppState<'s> {
-    // surface field is before the window field, so that surface is dropped before window
-    surface: RenderSurface<'s>,
+struct ActiveAppState {
+    // our window is backed by an Arc, so we actually can use static lifetime for RenderSurface
+    surface: RenderSurface<'static>,
     window: Arc<Window>,
 }
 
@@ -35,15 +35,15 @@ struct SuspendedAppState {
     cached_window: Option<Arc<Window>>,
 }
 
-enum AppState<'s> {
-    Active(ActiveAppState<'s>),
+enum AppState {
+    Active(ActiveAppState),
     Suspended(SuspendedAppState),
 }
 
-pub struct BaseApp<'s, T: BaseAppLogic> {
+pub struct BaseApp<T: BaseAppLogic> {
     context: RenderContext,
     renderers: Vec<Option<Renderer>>,
-    app_state: AppState<'s>,
+    app_state: AppState,
     // reuse scene every frame, so that we don't spend resources
     // recreating it every frame
     scene: Scene,
@@ -71,7 +71,7 @@ fn create_vello_renderer(context: &RenderContext, surface: &RenderSurface) -> Re
     .expect("couldn't create renderer")
 }
 
-impl<'s, T: BaseAppLogic> ApplicationHandler for BaseApp<'s, T> {
+impl<T: BaseAppLogic> ApplicationHandler for BaseApp<T> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let AppState::Suspended(SuspendedAppState { cached_window }) = &mut self.app_state else {
             return;
@@ -180,8 +180,9 @@ impl<'s, T: BaseAppLogic> ApplicationHandler for BaseApp<'s, T> {
     }
 }
 
-impl<'s, T: BaseAppLogic> BaseApp<'s, T> {
-    fn create_vello_surface(&mut self, window: &Arc<Window>) -> RenderSurface<'s> {
+impl<T: BaseAppLogic> BaseApp<T> {
+    // our window is backed by an Arc, so we actually can use static lifetime for RenderSurface
+    fn create_vello_surface(&mut self, window: &Arc<Window>) -> RenderSurface<'static> {
         let size = window.inner_size();
 
         // wgpu may crash if width or height is 0, don't allow that
@@ -195,7 +196,7 @@ impl<'s, T: BaseAppLogic> BaseApp<'s, T> {
     }
 }
 
-impl<'a, T: BaseAppLogic> BaseApp<'a, T> {
+impl<T: BaseAppLogic> BaseApp<T> {
     pub fn new(app_logic: T) -> Self {
         Self {
             context: RenderContext::new(),

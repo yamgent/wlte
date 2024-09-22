@@ -16,11 +16,11 @@ impl BaseAppLogic for AppLogic {
     }
 }
 
-pub struct App<'b> {
-    base_app: BaseApp<'b, AppLogic>,
+pub struct App {
+    base_app: BaseApp<AppLogic>,
 }
 
-impl<'b> App<'b> {
+impl App {
     pub fn new() -> Self {
         Self {
             base_app: BaseApp::new(AppLogic),
