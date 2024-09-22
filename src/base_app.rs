@@ -229,7 +229,11 @@ fn create_winit_window(event_loop: &ActiveEventLoop) -> Arc<Window> {
         .with_inner_size(LogicalSize::new(860, 640))
         .with_resizable(true)
         .with_title("wlte");
-    Arc::new(event_loop.create_window(attr).unwrap())
+    Arc::new(
+        event_loop
+            .create_window(attr)
+            .expect("cannot create window"),
+    )
 }
 
 fn create_vello_renderer(context: &RenderContext, surface: &RenderSurface) -> Renderer {
@@ -321,7 +325,7 @@ impl<T: BaseAppLogic> BaseApp<T> {
         let event_loop = EventLoop::new()?;
         event_loop
             .run_app(&mut self)
-            .expect("Cannot run event loop");
+            .expect("cannot run event loop");
 
         Ok(())
     }
