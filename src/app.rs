@@ -30,7 +30,7 @@ impl BaseAppLogic for AppLogic {
             size: 16.0,
             transform: Affine::translate((30.0, 50.0)),
             glyph_transform: None,
-            brush: &Brush::Solid(Color::WHITE).into(),
+            brush: &Brush::Solid(Color::WHITE),
             style: Fill::NonZero,
             text: &self.text,
             _marker: PhantomData,
