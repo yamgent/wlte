@@ -1,5 +1,5 @@
 mod app;
-mod base_app;
+mod base;
 
 use app::App;
 

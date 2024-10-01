@@ -6,9 +6,7 @@ use vello::{
     peniko::{Brush, Color, Fill},
 };
 
-use crate::base_app::{
-    BaseApp, BaseAppEvent, BaseAppLogic, BaseAppRenderer, DrawMonospaceTextOptions,
-};
+use crate::base::{BaseApp, BaseAppEvent, BaseAppLogic, BaseAppRenderer, DrawMonospaceTextOptions};
 
 struct AppLogic {
     text: String,
