@@ -11,7 +11,7 @@ use winit::{
 
 use super::renderer::BaseAppRenderer;
 
-pub trait BaseAppLogic {
+pub trait AppHandler {
     fn handle_events(&mut self, event: BaseAppEvent);
     fn render(&mut self, renderer: &mut BaseAppRenderer);
 }
@@ -36,10 +36,10 @@ enum AppState {
     Suspended(SuspendedAppState),
 }
 
-pub struct BaseApp<T: BaseAppLogic> {
-    app_state: AppState,
-    app_renderer: BaseAppRenderer,
-    app_logic: T,
+struct BaseApp<T: AppHandler> {
+    state: AppState,
+    renderer: BaseAppRenderer,
+    handler: T,
 }
 
 fn create_winit_window(event_loop: &ActiveEventLoop) -> Arc<Window> {
@@ -54,9 +54,9 @@ fn create_winit_window(event_loop: &ActiveEventLoop) -> Arc<Window> {
     )
 }
 
-impl<T: BaseAppLogic> ApplicationHandler for BaseApp<T> {
+impl<T: AppHandler> ApplicationHandler for BaseApp<T> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let AppState::Suspended(SuspendedAppState { cached_window }) = &mut self.app_state else {
+        let AppState::Suspended(SuspendedAppState { cached_window }) = &mut self.state else {
             return;
         };
 
@@ -64,14 +64,14 @@ impl<T: BaseAppLogic> ApplicationHandler for BaseApp<T> {
             .take()
             .unwrap_or_else(|| create_winit_window(event_loop));
 
-        let surface = self.app_renderer.create_vello_surface(&window);
+        let surface = self.renderer.create_vello_surface(&window);
 
-        self.app_state = AppState::Active(ActiveAppState { window, surface });
+        self.state = AppState::Active(ActiveAppState { window, surface });
     }
 
     fn suspended(&mut self, _event_loop: &ActiveEventLoop) {
-        if let AppState::Active(ActiveAppState { window, .. }) = &self.app_state {
-            self.app_state = AppState::Suspended(SuspendedAppState {
+        if let AppState::Active(ActiveAppState { window, .. }) = &self.state {
+            self.state = AppState::Suspended(SuspendedAppState {
                 cached_window: Some(window.clone()),
             });
         }
@@ -84,7 +84,7 @@ impl<T: BaseAppLogic> ApplicationHandler for BaseApp<T> {
         event: WindowEvent,
     ) {
         // only handle event if it is our window, and we are in active state
-        let active_state = match &mut self.app_state {
+        let active_state = match &mut self.state {
             AppState::Active(state) if state.window.id() == window_id => state,
             _ => return,
         };
@@ -92,20 +92,20 @@ impl<T: BaseAppLogic> ApplicationHandler for BaseApp<T> {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => {
-                self.app_renderer
+                self.renderer
                     .resize_surface(&mut active_state.surface, &size);
             }
             WindowEvent::RedrawRequested => {
-                self.app_renderer.start_new_frame();
-                self.app_logic.render(&mut self.app_renderer);
-                self.app_renderer.present_frame(&active_state.surface);
+                self.renderer.start_new_frame();
+                self.handler.render(&mut self.renderer);
+                self.renderer.present_frame(&active_state.surface);
             }
             WindowEvent::KeyboardInput {
                 event,
                 is_synthetic,
                 ..
             } => {
-                self.app_logic.handle_events(BaseAppEvent::KeyboardEvent {
+                self.handler.handle_events(BaseAppEvent::KeyboardEvent {
                     event,
                     is_synthetic,
                 });
@@ -116,20 +116,29 @@ impl<T: BaseAppLogic> ApplicationHandler for BaseApp<T> {
     }
 }
 
-impl<T: BaseAppLogic> BaseApp<T> {
-    pub fn new(app_logic: T) -> Self {
+pub struct AppContext {
+    state: AppState,
+    renderer: BaseAppRenderer,
+}
+
+impl AppContext {
+    pub fn new() -> Self {
         Self {
-            app_state: AppState::Suspended(SuspendedAppState {
+            state: AppState::Suspended(SuspendedAppState {
                 cached_window: None,
             }),
-            app_renderer: BaseAppRenderer::new(),
-            app_logic,
+            renderer: BaseAppRenderer::new(),
         }
     }
-    pub fn run(mut self) -> Result<()> {
+
+    pub fn run(self, handler: impl AppHandler) -> Result<()> {
         let event_loop = EventLoop::new()?;
         event_loop
-            .run_app(&mut self)
+            .run_app(&mut BaseApp {
+                state: self.state,
+                renderer: self.renderer,
+                handler,
+            })
             .expect("cannot run event loop");
 
         Ok(())
