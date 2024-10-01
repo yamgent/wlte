@@ -9,11 +9,11 @@ use winit::{
     window::{Window, WindowId},
 };
 
-use super::renderer::BaseAppRenderer;
+use super::renderer::{AppRenderer, BaseAppRenderer};
 
 pub trait AppHandler {
     fn handle_events(&mut self, event: BaseAppEvent);
-    fn render(&mut self, renderer: &mut BaseAppRenderer);
+    fn render(&mut self, renderer: &mut AppRenderer);
 }
 
 #[derive(Debug)]
@@ -97,7 +97,7 @@ impl<T: AppHandler> ApplicationHandler for BaseApp<T> {
             }
             WindowEvent::RedrawRequested => {
                 self.renderer.start_new_frame();
-                self.handler.render(&mut self.renderer);
+                self.handler.render(&mut ((&mut self.renderer).into()));
                 self.renderer.present_frame(&active_state.surface);
             }
             WindowEvent::KeyboardInput {

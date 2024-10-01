@@ -6,9 +6,7 @@ use vello::{
     peniko::{Brush, Color, Fill},
 };
 
-use crate::base::{
-    AppContext, AppHandler, BaseAppEvent, BaseAppRenderer, DrawMonospaceTextOptions,
-};
+use crate::base::{AppContext, AppHandler, AppRenderer, BaseAppEvent, DrawMonospaceTextOptions};
 
 pub struct App {
     text: String,
@@ -24,7 +22,7 @@ impl AppHandler for App {
         self.text = format!("Event: is_synthetic is {}, rest: {:?}", is_synthetic, event);
     }
 
-    fn render(&mut self, renderer: &mut BaseAppRenderer) {
+    fn render(&mut self, renderer: &mut AppRenderer) {
         // TODO: Handle rendering
         renderer.draw_monospace_text(DrawMonospaceTextOptions::<&Brush, _, _> {
             size: 16.0,
