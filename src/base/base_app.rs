@@ -12,12 +12,12 @@ use winit::{
 use super::renderer::{AppRenderer, BaseAppRenderer};
 
 pub trait AppHandler {
-    fn handle_events(&mut self, event: BaseAppEvent);
+    fn handle_events(&mut self, event: AppEvent);
     fn render(&mut self, renderer: &mut AppRenderer);
 }
 
 #[derive(Debug)]
-pub enum BaseAppEvent {
+pub enum AppEvent {
     KeyboardEvent { event: KeyEvent, is_synthetic: bool },
 }
 
@@ -105,7 +105,7 @@ impl<T: AppHandler> ApplicationHandler for BaseApp<T> {
                 is_synthetic,
                 ..
             } => {
-                self.handler.handle_events(BaseAppEvent::KeyboardEvent {
+                self.handler.handle_events(AppEvent::KeyboardEvent {
                     event,
                     is_synthetic,
                 });

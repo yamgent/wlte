@@ -6,16 +6,16 @@ use vello::{
     peniko::{Brush, Color, Fill},
 };
 
-use crate::base::{AppContext, AppHandler, AppRenderer, BaseAppEvent, DrawMonospaceTextOptions};
+use crate::base::{AppContext, AppEvent, AppHandler, AppRenderer, DrawMonospaceTextOptions};
 
 pub struct App {
     text: String,
 }
 
 impl AppHandler for App {
-    fn handle_events(&mut self, event: BaseAppEvent) {
+    fn handle_events(&mut self, event: AppEvent) {
         // TODO: Handle events
-        let BaseAppEvent::KeyboardEvent {
+        let AppEvent::KeyboardEvent {
             event,
             is_synthetic,
         } = event;
