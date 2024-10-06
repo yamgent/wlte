@@ -1,6 +1,6 @@
 use std::{marker::PhantomData, num::NonZeroUsize, sync::Arc};
 use vello::{
-    glyph::{skrifa::MetadataProvider, Glyph},
+    glyph::Glyph,
     kurbo::Affine,
     peniko::{BrushRef, Color, Font, StyleRef},
     util::{RenderContext, RenderSurface},
@@ -9,7 +9,7 @@ use vello::{
 };
 use winit::{dpi::PhysicalSize, window::Window};
 
-use super::font;
+use super::font::{self, FontMetadata};
 
 fn create_vello_renderer(context: &RenderContext, surface: &RenderSurface) -> Renderer {
     Renderer::new(
@@ -142,17 +142,12 @@ impl<'ar> AppRenderer<'ar> {
         S: Into<StyleRef<'a>>,
         T: AsRef<str>,
     {
-        let font_ref = font::to_font_ref(&self.0.monospace_font).expect("cannot get font ref");
-
-        let axes = font_ref.axes();
-        let font_size = vello::skrifa::instance::Size::new(options.size);
         // TODO: Support customising font axes
         let variations: &[(&str, f32)] = &[];
-        let var_loc = axes.location(variations.iter().copied());
-        let metrics = font_ref.metrics(font_size, &var_loc);
-        let line_height = metrics.ascent - metrics.descent + metrics.leading;
-        let charmap = font_ref.charmap();
-        let glyph_metrics = font_ref.glyph_metrics(font_size, &var_loc);
+
+        let metadata = FontMetadata::new(&self.0.monospace_font, variations);
+        let font_glyphs = metadata.glyphs();
+        let font_metrics = metadata.metrics(options.size);
 
         let mut pen_x = 0f32;
         let mut pen_y = 0f32;
@@ -169,13 +164,13 @@ impl<'ar> AppRenderer<'ar> {
                 options.style,
                 options.text.as_ref().chars().filter_map(|ch| {
                     if ch == '\n' {
-                        pen_y += line_height;
+                        pen_y += font_metrics.glyph_height();
                         pen_x = 0.0;
                         return None;
                     }
 
-                    let gid = charmap.map(ch).unwrap_or_default();
-                    let advance = glyph_metrics.advance_width(gid).unwrap_or_default();
+                    let gid = font_glyphs.glyph(ch);
+                    let advance = font_metrics.glyph_width(gid);
                     let x = pen_x;
                     pen_x += advance;
                     Some(Glyph {
