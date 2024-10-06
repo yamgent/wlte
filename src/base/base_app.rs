@@ -12,7 +12,7 @@ use winit::{
 use super::renderer::{AppRenderer, BaseAppRenderer};
 
 pub trait AppHandler {
-    fn handle_events(&mut self, event: AppEvent);
+    fn handle_events(&mut self, event: AppEvent, screen_size: PhysicalSize<u32>);
     fn render(&mut self, renderer: &mut AppRenderer, screen_size: PhysicalSize<u32>);
 }
 
@@ -93,6 +93,11 @@ impl<T: AppHandler> ApplicationHandler for BaseApp<T> {
             _ => return,
         };
 
+        let surface_size = PhysicalSize::new(
+            active_state.surface.config.width,
+            active_state.surface.config.height,
+        );
+
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => {
@@ -101,11 +106,6 @@ impl<T: AppHandler> ApplicationHandler for BaseApp<T> {
             }
             WindowEvent::RedrawRequested => {
                 self.renderer.start_new_frame();
-
-                let surface_size = PhysicalSize::new(
-                    active_state.surface.config.width,
-                    active_state.surface.config.height,
-                );
 
                 self.handler
                     .render(&mut ((&mut self.renderer).into()), surface_size);
@@ -116,10 +116,13 @@ impl<T: AppHandler> ApplicationHandler for BaseApp<T> {
                 is_synthetic,
                 ..
             } => {
-                self.handler.handle_events(AppEvent::KeyboardEvent {
-                    event,
-                    is_synthetic,
-                });
+                self.handler.handle_events(
+                    AppEvent::KeyboardEvent {
+                        event,
+                        is_synthetic,
+                    },
+                    surface_size,
+                );
                 active_state.window.request_redraw();
             }
             _ => {}

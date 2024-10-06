@@ -1,8 +1,8 @@
 use std::{marker::PhantomData, num::NonZeroUsize, sync::Arc};
 use vello::{
     glyph::Glyph,
-    kurbo::Affine,
-    peniko::{BrushRef, Color, Font, StyleRef},
+    kurbo::{Affine, Rect},
+    peniko::{BrushRef, Color, Fill, Font, StyleRef},
     util::{RenderContext, RenderSurface},
     wgpu::{Maintain, PresentMode},
     AaConfig, AaSupport, RenderParams, Renderer, RendererOptions, Scene,
@@ -125,6 +125,14 @@ where
     pub _marker: PhantomData<&'a ()>,
 }
 
+pub struct DrawFillRectangleOptions {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+    pub fill_color: Color,
+}
+
 pub struct AppRenderer<'a>(&'a mut BaseAppRenderer);
 
 impl<'a> From<&'a mut BaseAppRenderer> for AppRenderer<'a> {
@@ -134,6 +142,23 @@ impl<'a> From<&'a mut BaseAppRenderer> for AppRenderer<'a> {
 }
 
 impl<'ar> AppRenderer<'ar> {
+    pub fn draw_fill_rectangle(&mut self, options: DrawFillRectangleOptions) {
+        let rect = Rect::new(
+            options.x,
+            options.y,
+            options.x + options.width,
+            options.y + options.height,
+        );
+
+        self.0.scene.fill(
+            Fill::NonZero,
+            Affine::IDENTITY,
+            options.fill_color,
+            None,
+            &rect,
+        );
+    }
+
     pub fn get_monospace_font_height(&self, font_size: f32) -> f32 {
         // TODO: Support customising font axes
         let variations: &[(&str, f32)] = &[];
@@ -141,6 +166,33 @@ impl<'ar> AppRenderer<'ar> {
         let metadata = FontMetadata::new(&self.0.monospace_font, variations);
         let font_metrics = metadata.metrics(font_size);
         font_metrics.glyph_height()
+    }
+
+    pub fn get_monospace_bounds<T: AsRef<str>>(&self, font_size: f32, text: T) -> (f32, f32) {
+        // TODO: Support customising font axes
+        let variations: &[(&str, f32)] = &[];
+
+        let metadata = FontMetadata::new(&self.0.monospace_font, variations);
+        let font_glyphs = metadata.glyphs();
+        let font_metrics = metadata.metrics(font_size);
+
+        let mut width = 0.0f32;
+        let mut height = 0.0f32;
+
+        text.as_ref().lines().for_each(|line| {
+            height += font_metrics.glyph_height();
+            let mut line_width = 0.0;
+
+            line.chars().for_each(|ch| {
+                let gid = font_glyphs.glyph(ch);
+                let advance = font_metrics.glyph_width(gid);
+                line_width += advance;
+            });
+
+            width = width.max(line_width);
+        });
+
+        (width, height)
     }
 
     pub fn draw_monospace_text<'a, B, S, T>(
