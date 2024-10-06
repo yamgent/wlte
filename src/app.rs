@@ -9,6 +9,9 @@ use winit::dpi::PhysicalSize;
 
 use crate::base::{AppContext, AppEvent, AppHandler, AppRenderer, DrawMonospaceTextOptions};
 
+const APP_NAME: &str = env!("CARGO_PKG_NAME");
+const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 pub struct App {
     text: String,
 }
@@ -39,9 +42,21 @@ impl AppHandler for App {
             _marker: PhantomData,
         });
 
+        let message_row = total_tildes / 3;
+
         renderer.draw_monospace_text(DrawMonospaceTextOptions::<&Brush, _, _> {
             size: 16.0,
-            transform: Affine::translate((30.0, font_height as f64 * 3.0)),
+            transform: Affine::translate((30.0, font_height as f64 * message_row as f64)),
+            glyph_transform: None,
+            brush: &Brush::Solid(Color::WHITE),
+            style: Fill::NonZero,
+            text: format!("{APP_NAME} editor -- version {APP_VERSION}"),
+            _marker: PhantomData,
+        });
+
+        renderer.draw_monospace_text(DrawMonospaceTextOptions::<&Brush, _, _> {
+            size: 16.0,
+            transform: Affine::translate((30.0, font_height as f64 * 7.0)),
             glyph_transform: None,
             brush: &Brush::Solid(Color::WHITE),
             style: Fill::NonZero,
@@ -53,7 +68,7 @@ impl AppHandler for App {
 
 impl App {
     pub fn run() -> Result<()> {
-        AppContext::new().run(App {
+        AppContext::new(APP_NAME.to_string()).run(App {
             text: "No events yet!".to_string(),
         })
     }
