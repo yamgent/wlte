@@ -3,7 +3,7 @@ use std::sync::Arc;
 use vello::util::RenderSurface;
 use winit::{
     application::ApplicationHandler,
-    dpi::LogicalSize,
+    dpi::{LogicalSize, PhysicalSize},
     event::{KeyEvent, WindowEvent},
     event_loop::{ActiveEventLoop, EventLoop},
     window::{Window, WindowId},
@@ -13,7 +13,7 @@ use super::renderer::{AppRenderer, BaseAppRenderer};
 
 pub trait AppHandler {
     fn handle_events(&mut self, event: AppEvent);
-    fn render(&mut self, renderer: &mut AppRenderer);
+    fn render(&mut self, renderer: &mut AppRenderer, screen_size: PhysicalSize<u32>);
 }
 
 #[derive(Debug)]
@@ -97,7 +97,14 @@ impl<T: AppHandler> ApplicationHandler for BaseApp<T> {
             }
             WindowEvent::RedrawRequested => {
                 self.renderer.start_new_frame();
-                self.handler.render(&mut ((&mut self.renderer).into()));
+
+                let surface_size = PhysicalSize::new(
+                    active_state.surface.config.width,
+                    active_state.surface.config.height,
+                );
+
+                self.handler
+                    .render(&mut ((&mut self.renderer).into()), surface_size);
                 self.renderer.present_frame(&active_state.surface);
             }
             WindowEvent::KeyboardInput {

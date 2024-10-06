@@ -134,6 +134,15 @@ impl<'a> From<&'a mut BaseAppRenderer> for AppRenderer<'a> {
 }
 
 impl<'ar> AppRenderer<'ar> {
+    pub fn get_monospace_font_height(&self, font_size: f32) -> f32 {
+        // TODO: Support customising font axes
+        let variations: &[(&str, f32)] = &[];
+
+        let metadata = FontMetadata::new(&self.0.monospace_font, variations);
+        let font_metrics = metadata.metrics(font_size);
+        font_metrics.glyph_height()
+    }
+
     pub fn draw_monospace_text<'a, B, S, T>(
         &'a mut self,
         options: DrawMonospaceTextOptions<'a, B, S, T>,
