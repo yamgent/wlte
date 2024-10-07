@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+use std::{fs, marker::PhantomData, path::Path};
 
 use anyhow::Result;
 use vello::{
@@ -12,19 +12,27 @@ use winit::{
 };
 
 use crate::base::{
-    AppContext, AppEvent, AppHandler, AppRenderer, DrawFillRectangleOptions,
-    DrawMonospaceTextOptions,
+    AppContext, AppEvent, AppFont, AppHandler, AppRenderer, DrawFillRectangleOptions,
+    DrawMonospaceTextOptions, Position,
 };
 
 const APP_NAME: &str = env!("CARGO_PKG_NAME");
 const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-struct Position<T> {
-    x: T,
-    y: T,
+fn load_monospace_font() -> AppFont {
+    let monospace_font_path = if cfg!(windows) {
+        Path::new(r"C:\Windows\Fonts\consola.ttf")
+    } else {
+        panic!("don't know where to find monospace font");
+    };
+
+    let monospace_font_bytes = fs::read(monospace_font_path).expect("fail to load monospace font");
+
+    monospace_font_bytes.into()
 }
 
 pub struct App {
+    monospace_font: AppFont,
     text: String,
     cursor_pos: Position<u32>,
 }
@@ -63,8 +71,12 @@ impl AppHandler for App {
     fn render(&mut self, renderer: &mut AppRenderer, screen_size: PhysicalSize<u32>) {
         let font_size = 16.0;
 
-        let single_space_width = renderer.get_monospace_bounds(font_size, " ").0 as f64;
-        let font_height = renderer.get_monospace_font_height(font_size) as f64;
+        let bounds = self
+            .monospace_font
+            .variations(&[])
+            .measure_text(font_size, " ");
+        let single_space_width = bounds.w as f64;
+        let font_height = bounds.h as f64;
 
         renderer.draw_fill_rectangle(DrawFillRectangleOptions {
             x: self.cursor_pos.x as f64 * single_space_width,
@@ -77,7 +89,8 @@ impl AppHandler for App {
         let total_tildes = (screen_size.height as f64 / font_height).ceil() as usize;
 
         renderer.draw_monospace_text(DrawMonospaceTextOptions::<&Brush, _, _> {
-            size: 16.0,
+            font: &self.monospace_font,
+            size: font_size,
             transform: Affine::translate((0.0, 0.0)),
             glyph_transform: None,
             brush: &Brush::Solid(Color::WHITE),
@@ -89,7 +102,8 @@ impl AppHandler for App {
         let message_row = total_tildes / 3;
 
         renderer.draw_monospace_text(DrawMonospaceTextOptions::<&Brush, _, _> {
-            size: 16.0,
+            font: &self.monospace_font,
+            size: font_size,
             transform: Affine::translate((
                 single_space_width * 6.0,
                 font_height * (message_row as f64),
@@ -102,7 +116,8 @@ impl AppHandler for App {
         });
 
         renderer.draw_monospace_text(DrawMonospaceTextOptions::<&Brush, _, _> {
-            size: 16.0,
+            font: &self.monospace_font,
+            size: font_size,
             transform: Affine::translate((single_space_width * 6.0, font_height * 7.0)),
             glyph_transform: None,
             brush: &Brush::Solid(Color::WHITE),
@@ -116,6 +131,7 @@ impl AppHandler for App {
 impl App {
     pub fn run() -> Result<()> {
         AppContext::new(APP_NAME.to_string()).run(App {
+            monospace_font: load_monospace_font(),
             text: "No events yet!".to_string(),
             cursor_pos: Position { x: 0, y: 0 },
         })

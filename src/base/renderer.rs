@@ -2,14 +2,14 @@ use std::{marker::PhantomData, num::NonZeroUsize, sync::Arc};
 use vello::{
     glyph::Glyph,
     kurbo::{Affine, Rect},
-    peniko::{BrushRef, Color, Fill, Font, StyleRef},
+    peniko::{BrushRef, Color, Fill, StyleRef},
     util::{RenderContext, RenderSurface},
     wgpu::{Maintain, PresentMode},
     AaConfig, AaSupport, RenderParams, Renderer, RendererOptions, Scene,
 };
 use winit::{dpi::PhysicalSize, window::Window};
 
-use super::font::{self, FontMetadata};
+use super::{font::get_font, AppFont};
 
 fn create_vello_renderer(context: &RenderContext, surface: &RenderSurface) -> Renderer {
     Renderer::new(
@@ -30,8 +30,6 @@ pub struct BaseAppRenderer {
     // reuse scene every frame, so that we don't spend resources
     // recreating it every frame
     scene: Scene,
-
-    monospace_font: Font,
 }
 
 impl BaseAppRenderer {
@@ -40,7 +38,6 @@ impl BaseAppRenderer {
             context: RenderContext::new(),
             renderers: vec![],
             scene: Scene::new(),
-            monospace_font: font::load_monospace_font(),
         }
     }
 
@@ -116,6 +113,7 @@ where
     S: Into<StyleRef<'a>>,
     T: AsRef<str>,
 {
+    pub font: &'a AppFont,
     pub size: f32,
     pub transform: Affine,
     pub glyph_transform: Option<Affine>,
@@ -159,42 +157,6 @@ impl<'ar> AppRenderer<'ar> {
         );
     }
 
-    pub fn get_monospace_font_height(&self, font_size: f32) -> f32 {
-        // TODO: Support customising font axes
-        let variations: &[(&str, f32)] = &[];
-
-        let metadata = FontMetadata::new(&self.0.monospace_font, variations);
-        let font_metrics = metadata.metrics(font_size);
-        font_metrics.glyph_height()
-    }
-
-    pub fn get_monospace_bounds<T: AsRef<str>>(&self, font_size: f32, text: T) -> (f32, f32) {
-        // TODO: Support customising font axes
-        let variations: &[(&str, f32)] = &[];
-
-        let metadata = FontMetadata::new(&self.0.monospace_font, variations);
-        let font_glyphs = metadata.glyphs();
-        let font_metrics = metadata.metrics(font_size);
-
-        let mut width = 0.0f32;
-        let mut height = 0.0f32;
-
-        text.as_ref().lines().for_each(|line| {
-            height += font_metrics.glyph_height();
-            let mut line_width = 0.0;
-
-            line.chars().for_each(|ch| {
-                let gid = font_glyphs.glyph(ch);
-                let advance = font_metrics.glyph_width(gid);
-                line_width += advance;
-            });
-
-            width = width.max(line_width);
-        });
-
-        (width, height)
-    }
-
     pub fn draw_monospace_text<'a, B, S, T>(
         &'a mut self,
         options: DrawMonospaceTextOptions<'a, B, S, T>,
@@ -206,16 +168,17 @@ impl<'ar> AppRenderer<'ar> {
         // TODO: Support customising font axes
         let variations: &[(&str, f32)] = &[];
 
-        let metadata = FontMetadata::new(&self.0.monospace_font, variations);
-        let font_glyphs = metadata.glyphs();
-        let font_metrics = metadata.metrics(options.size);
+        let variations = options.font.variations(variations);
+
+        let font_glyphs = variations.glyphs();
+        let font_metrics = variations.metrics(options.size);
 
         let mut pen_x = 0f32;
         let mut pen_y = 0f32;
 
         self.0
             .scene
-            .draw_glyphs(&self.0.monospace_font)
+            .draw_glyphs(get_font(options.font))
             .font_size(options.size)
             .transform(options.transform)
             .glyph_transform(options.glyph_transform)
