@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use anyhow::Result;
 use vello::{
-    kurbo::{Affine, Rect},
+    kurbo::Affine,
     peniko::{Brush, Color, Fill},
 };
 use winit::{
@@ -30,7 +30,7 @@ pub struct App {
 }
 
 impl AppHandler for App {
-    fn handle_events(&mut self, event: AppEvent, screen_size: PhysicalSize<u32>) {
+    fn handle_events(&mut self, event: AppEvent, _screen_size: PhysicalSize<u32>) {
         let AppEvent::KeyboardEvent {
             event,
             is_synthetic,

@@ -79,7 +79,7 @@ pub struct FontMetadata<'a> {
 
 impl<'a> FontMetadata<'a> {
     pub fn new(font: &'a Font, variations: &[(&str, f32)]) -> Self {
-        let font_ref = to_font_ref(&font).expect("cannot get font ref");
+        let font_ref = to_font_ref(font).expect("cannot get font ref");
         let var_loc = font_ref.axes().location(variations.iter().copied());
 
         Self { font_ref, var_loc }
