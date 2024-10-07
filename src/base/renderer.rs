@@ -107,7 +107,7 @@ impl BaseAppRenderer {
     }
 }
 
-pub struct DrawMonospaceTextOptions<'a, B, S, T>
+pub struct DrawTextOptions<'a, B, S, T>
 where
     B: Into<BrushRef<'a>>,
     S: Into<StyleRef<'a>>,
@@ -157,10 +157,8 @@ impl<'ar> AppRenderer<'ar> {
         );
     }
 
-    pub fn draw_monospace_text<'a, B, S, T>(
-        &'a mut self,
-        options: DrawMonospaceTextOptions<'a, B, S, T>,
-    ) where
+    pub fn draw_text<'a, B, S, T>(&'a mut self, options: DrawTextOptions<'a, B, S, T>)
+    where
         B: Into<BrushRef<'a>>,
         S: Into<StyleRef<'a>>,
         T: AsRef<str>,

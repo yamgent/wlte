@@ -11,4 +11,4 @@ pub use math::Position;
 pub use math::Size;
 pub use renderer::AppRenderer;
 pub use renderer::DrawFillRectangleOptions;
-pub use renderer::DrawMonospaceTextOptions;
+pub use renderer::DrawTextOptions;

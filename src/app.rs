@@ -13,7 +13,7 @@ use winit::{
 
 use crate::base::{
     AppContext, AppEvent, AppFont, AppHandler, AppRenderer, DrawFillRectangleOptions,
-    DrawMonospaceTextOptions, Position,
+    DrawTextOptions, Position,
 };
 
 const APP_NAME: &str = env!("CARGO_PKG_NAME");
@@ -88,7 +88,7 @@ impl AppHandler for App {
 
         let total_tildes = (screen_size.height as f64 / font_height).ceil() as usize;
 
-        renderer.draw_monospace_text(DrawMonospaceTextOptions::<&Brush, _, _> {
+        renderer.draw_text(DrawTextOptions::<&Brush, _, _> {
             font: &self.monospace_font,
             size: font_size,
             transform: Affine::translate((0.0, 0.0)),
@@ -101,7 +101,7 @@ impl AppHandler for App {
 
         let message_row = total_tildes / 3;
 
-        renderer.draw_monospace_text(DrawMonospaceTextOptions::<&Brush, _, _> {
+        renderer.draw_text(DrawTextOptions::<&Brush, _, _> {
             font: &self.monospace_font,
             size: font_size,
             transform: Affine::translate((
@@ -115,7 +115,7 @@ impl AppHandler for App {
             _marker: PhantomData,
         });
 
-        renderer.draw_monospace_text(DrawMonospaceTextOptions::<&Brush, _, _> {
+        renderer.draw_text(DrawTextOptions::<&Brush, _, _> {
             font: &self.monospace_font,
             size: font_size,
             transform: Affine::translate((single_space_width * 6.0, font_height * 7.0)),
