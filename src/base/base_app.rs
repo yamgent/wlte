@@ -3,7 +3,7 @@ use std::sync::Arc;
 use vello::util::RenderSurface;
 use winit::{
     application::ApplicationHandler,
-    dpi::LogicalSize,
+    dpi::{LogicalSize, PhysicalSize},
     event::{KeyEvent, WindowEvent},
     event_loop::{ActiveEventLoop, EventLoop},
     window::{Window, WindowId},
@@ -12,8 +12,8 @@ use winit::{
 use super::renderer::{AppRenderer, BaseAppRenderer};
 
 pub trait AppHandler {
-    fn handle_events(&mut self, event: AppEvent);
-    fn render(&mut self, renderer: &mut AppRenderer);
+    fn handle_events(&mut self, event: AppEvent, screen_size: PhysicalSize<u32>);
+    fn render(&mut self, renderer: &mut AppRenderer, screen_size: PhysicalSize<u32>);
 }
 
 #[derive(Debug)]
@@ -40,13 +40,17 @@ struct BaseApp<T: AppHandler> {
     state: AppState,
     renderer: BaseAppRenderer,
     handler: T,
+    name: String,
 }
 
-fn create_winit_window(event_loop: &ActiveEventLoop) -> Arc<Window> {
+fn create_winit_window<T: AsRef<str>>(
+    event_loop: &ActiveEventLoop,
+    window_title: T,
+) -> Arc<Window> {
     let attr = Window::default_attributes()
         .with_inner_size(LogicalSize::new(860, 640))
         .with_resizable(true)
-        .with_title("wlte");
+        .with_title(window_title.as_ref().to_string());
     Arc::new(
         event_loop
             .create_window(attr)
@@ -62,7 +66,7 @@ impl<T: AppHandler> ApplicationHandler for BaseApp<T> {
 
         let window = cached_window
             .take()
-            .unwrap_or_else(|| create_winit_window(event_loop));
+            .unwrap_or_else(|| create_winit_window(event_loop, &self.name));
 
         let surface = self.renderer.create_vello_surface(&window);
 
@@ -89,6 +93,11 @@ impl<T: AppHandler> ApplicationHandler for BaseApp<T> {
             _ => return,
         };
 
+        let surface_size = PhysicalSize::new(
+            active_state.surface.config.width,
+            active_state.surface.config.height,
+        );
+
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => {
@@ -97,7 +106,9 @@ impl<T: AppHandler> ApplicationHandler for BaseApp<T> {
             }
             WindowEvent::RedrawRequested => {
                 self.renderer.start_new_frame();
-                self.handler.render(&mut ((&mut self.renderer).into()));
+
+                self.handler
+                    .render(&mut ((&mut self.renderer).into()), surface_size);
                 self.renderer.present_frame(&active_state.surface);
             }
             WindowEvent::KeyboardInput {
@@ -105,10 +116,13 @@ impl<T: AppHandler> ApplicationHandler for BaseApp<T> {
                 is_synthetic,
                 ..
             } => {
-                self.handler.handle_events(AppEvent::KeyboardEvent {
-                    event,
-                    is_synthetic,
-                });
+                self.handler.handle_events(
+                    AppEvent::KeyboardEvent {
+                        event,
+                        is_synthetic,
+                    },
+                    surface_size,
+                );
                 active_state.window.request_redraw();
             }
             _ => {}
@@ -119,15 +133,17 @@ impl<T: AppHandler> ApplicationHandler for BaseApp<T> {
 pub struct AppContext {
     state: AppState,
     renderer: BaseAppRenderer,
+    name: String,
 }
 
 impl AppContext {
-    pub fn new() -> Self {
+    pub fn new(name: String) -> Self {
         Self {
             state: AppState::Suspended(SuspendedAppState {
                 cached_window: None,
             }),
             renderer: BaseAppRenderer::new(),
+            name,
         }
     }
 
@@ -137,6 +153,7 @@ impl AppContext {
             .run_app(&mut BaseApp {
                 state: self.state,
                 renderer: self.renderer,
+                name: self.name,
                 handler,
             })
             .expect("cannot run event loop");
