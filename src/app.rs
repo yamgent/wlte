@@ -92,10 +92,14 @@ impl AppHandler for App {
         let font_height = bounds.h as f64;
 
         renderer.draw_fill_rectangle(DrawFillRectangleOptions {
-            x: self.cursor_pos.x as f64 * single_space_width,
-            y: self.cursor_pos.y as f64 * font_height,
-            width: single_space_width,
-            height: font_height,
+            pos: Position {
+                x: self.cursor_pos.x as f64 * single_space_width,
+                y: self.cursor_pos.y as f64 * font_height,
+            },
+            size: Size {
+                w: single_space_width,
+                h: font_height,
+            },
             fill_color: Color::rgb(0.0, 1.0, 0.0),
         });
 

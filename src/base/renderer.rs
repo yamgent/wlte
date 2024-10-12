@@ -9,7 +9,7 @@ use vello::{
 };
 use winit::{dpi::PhysicalSize, window::Window};
 
-use super::{font::get_font, AppFont};
+use super::{font::get_font, AppFont, Position, Size};
 
 fn create_vello_renderer(context: &RenderContext, surface: &RenderSurface) -> Renderer {
     Renderer::new(
@@ -124,10 +124,8 @@ where
 }
 
 pub struct DrawFillRectangleOptions {
-    pub x: f64,
-    pub y: f64,
-    pub width: f64,
-    pub height: f64,
+    pub pos: Position<f64>,
+    pub size: Size<f64>,
     pub fill_color: Color,
 }
 
@@ -142,10 +140,10 @@ impl<'a> From<&'a mut BaseAppRenderer> for AppRenderer<'a> {
 impl<'ar> AppRenderer<'ar> {
     pub fn draw_fill_rectangle(&mut self, options: DrawFillRectangleOptions) {
         let rect = Rect::new(
-            options.x,
-            options.y,
-            options.x + options.width,
-            options.y + options.height,
+            options.pos.x,
+            options.pos.y,
+            options.pos.x + options.size.w,
+            options.pos.y + options.size.h,
         );
 
         self.0.scene.fill(
