@@ -1,4 +1,3 @@
-use anyhow::Result;
 use std::sync::Arc;
 use vello::util::RenderSurface;
 use winit::{
@@ -163,8 +162,8 @@ impl AppContext {
         }
     }
 
-    pub fn run(self, handler: impl AppHandler) -> Result<()> {
-        let event_loop = EventLoop::new()?;
+    pub fn run(self, handler: impl AppHandler) {
+        let event_loop = EventLoop::new().expect("cannot create event loop");
         event_loop
             .run_app(&mut BaseApp {
                 state: self.state,
@@ -173,7 +172,5 @@ impl AppContext {
                 handler,
             })
             .expect("cannot run event loop");
-
-        Ok(())
     }
 }

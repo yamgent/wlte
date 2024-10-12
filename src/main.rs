@@ -1,5 +1,3 @@
-use anyhow::Result;
-
-fn main() -> Result<()> {
-    wlte::run()
+fn main() {
+    wlte::run();
 }

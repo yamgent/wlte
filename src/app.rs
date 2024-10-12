@@ -1,6 +1,5 @@
 use std::{env, fs, marker::PhantomData, path::Path};
 
-use anyhow::Result;
 use vello::{
     kurbo::Affine,
     peniko::{Brush, Color, Fill},
@@ -151,7 +150,7 @@ impl App {
         env::args().nth(1).map(|s| s.to_string())
     }
 
-    pub fn run() -> Result<()> {
+    pub fn run() {
         let filepath_arg = Self::get_filepath_arg();
 
         AppContext::new(APP_NAME.to_string()).run(App {
@@ -177,6 +176,6 @@ impl App {
                     size: Size { w: 1, h: 1 },
                 },
             ),
-        })
+        });
     }
 }
