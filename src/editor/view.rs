@@ -18,6 +18,10 @@ impl View {
         Self { buffer }
     }
 
+    pub fn buffer_empty(&self) -> bool {
+        buffer_lines(&self.buffer).is_empty()
+    }
+
     pub fn render(
         &self,
         renderer: &mut AppRenderer,
@@ -30,10 +34,33 @@ impl View {
             .measure_text(monospace_font_size, " ");
         let font_height = bounds.h as f64;
 
-        let total_rows = ((view_size.h as f32) / bounds.h).floor() as usize;
+        let file_name_text = self
+            .buffer
+            .file_path()
+            .clone()
+            .unwrap_or("[No Name]".to_string());
+        let file_name_text_bounds = monospace_font
+            .variations(&[])
+            .measure_text(monospace_font_size, &file_name_text);
+
+        renderer.draw_text(DrawTextOptions::<&Brush, _, _> {
+            font: monospace_font,
+            size: monospace_font_size,
+            transform: Affine::translate((
+                view_size.w as f64 - file_name_text_bounds.w as f64,
+                font_height,
+            )),
+            glyph_transform: None,
+            brush: &Brush::Solid(Color::WHITE),
+            style: Fill::NonZero,
+            text: file_name_text,
+            _marker: PhantomData,
+        });
+
+        let total_text_rows = ((view_size.h as f32) / bounds.h).floor() as usize;
         let empty_row_text = "~".to_string();
 
-        (0..total_rows).for_each(|r| {
+        (0..total_text_rows).for_each(|r| {
             let text = buffer_lines(&self.buffer)
                 .iter()
                 .nth(r)

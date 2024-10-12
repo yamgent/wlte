@@ -1,4 +1,4 @@
-use std::{fs, marker::PhantomData, path::Path};
+use std::{env, fs, marker::PhantomData, path::Path};
 
 use anyhow::Result;
 use vello::{
@@ -104,8 +104,6 @@ impl AppHandler for App {
             fill_color: Color::rgb(0.0, 1.0, 0.0),
         });
 
-        let total_tildes = (screen_size.h as f64 / font_height).ceil() as usize;
-
         self.view.render(
             renderer,
             screen_size,
@@ -113,21 +111,24 @@ impl AppHandler for App {
             self.monospace_font_size,
         );
 
-        let message_row = total_tildes / 3;
+        if self.view.buffer_empty() {
+            let total_tildes = (screen_size.h as f64 / font_height).ceil() as usize;
+            let message_row = total_tildes / 3;
 
-        renderer.draw_text(DrawTextOptions::<&Brush, _, _> {
-            font: &self.monospace_font,
-            size: self.monospace_font_size,
-            transform: Affine::translate((
-                single_space_width * 6.0,
-                font_height * (message_row as f64),
-            )),
-            glyph_transform: None,
-            brush: &Brush::Solid(Color::WHITE),
-            style: Fill::NonZero,
-            text: format!("{APP_NAME} editor -- version {APP_VERSION}"),
-            _marker: PhantomData,
-        });
+            renderer.draw_text(DrawTextOptions::<&Brush, _, _> {
+                font: &self.monospace_font,
+                size: self.monospace_font_size,
+                transform: Affine::translate((
+                    single_space_width * 6.0,
+                    font_height * (message_row as f64),
+                )),
+                glyph_transform: None,
+                brush: &Brush::Solid(Color::WHITE),
+                style: Fill::NonZero,
+                text: format!("{APP_NAME} editor -- version {APP_VERSION}"),
+                _marker: PhantomData,
+            });
+        }
 
         renderer.draw_text(DrawTextOptions::<&Brush, _, _> {
             font: &self.monospace_font,
@@ -143,16 +144,32 @@ impl AppHandler for App {
 }
 
 impl App {
+    fn get_filepath_arg() -> Option<String> {
+        env::args().nth(1).map(|s| s.to_string())
+    }
+
     pub fn run() -> Result<()> {
+        let filepath_arg = Self::get_filepath_arg();
+
         AppContext::new(APP_NAME.to_string()).run(App {
             monospace_font: load_monospace_font(),
             monospace_font_size: 16.0,
             text: "No events yet!".to_string(),
             cursor_pos: Position { x: 0, y: 0 },
-            view: View::new(Buffer::new(vec![
-                // TODO: Should not use dummy text?
-                "Hello, World!".to_string(),
-            ])),
+            view: View::new(
+                filepath_arg
+                    .map(|path| {
+                        if !fs::exists(&path).unwrap_or(false)
+                            || fs::metadata(&path).map(|md| md.is_file()).unwrap_or(false)
+                        {
+                            Buffer::load(path)
+                        } else {
+                            // TODO: Handle directory properly
+                            Buffer::new()
+                        }
+                    })
+                    .unwrap_or_else(|| Buffer::new()),
+            ),
         })
     }
 }
