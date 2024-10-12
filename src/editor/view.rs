@@ -67,9 +67,8 @@ impl View {
 
         (0..total_text_rows).for_each(|r| {
             let text = buffer_lines(&self.buffer)
-                .iter()
-                .nth(r)
-                .unwrap_or_else(|| &empty_row_text);
+                .get(r)
+                .unwrap_or(&empty_row_text);
             renderer.draw_text(DrawTextOptions::<&Brush, _, _> {
                 font: monospace_font,
                 size: monospace_font_size,

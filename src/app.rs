@@ -171,7 +171,7 @@ impl App {
                             Buffer::new()
                         }
                     })
-                    .unwrap_or_else(|| Buffer::new()),
+                    .unwrap_or_else(Buffer::new),
                 Bounds {
                     pos: Position { x: 0, y: 0 },
                     size: Size { w: 1, h: 1 },
