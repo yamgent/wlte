@@ -49,16 +49,16 @@ impl AppHandler for App {
 
         if matches!(event.state, ElementState::Pressed) {
             match event.physical_key {
-                PhysicalKey::Code(KeyCode::ArrowLeft) => {
+                PhysicalKey::Code(KeyCode::KeyH) => {
                     self.cursor_pos.x = self.cursor_pos.x.saturating_sub(1);
                 }
-                PhysicalKey::Code(KeyCode::ArrowUp) => {
+                PhysicalKey::Code(KeyCode::KeyK) => {
                     self.cursor_pos.y = self.cursor_pos.y.saturating_sub(1);
                 }
-                PhysicalKey::Code(KeyCode::ArrowRight) => {
+                PhysicalKey::Code(KeyCode::KeyL) => {
                     self.cursor_pos.x += 1;
                 }
-                PhysicalKey::Code(KeyCode::ArrowDown) => {
+                PhysicalKey::Code(KeyCode::KeyJ) => {
                     self.cursor_pos.y += 1;
                 }
                 _ => {}
