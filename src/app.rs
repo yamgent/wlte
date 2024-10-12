@@ -39,11 +39,6 @@ pub struct App {
 
 impl AppHandler for App {
     fn handle_events(&mut self, event: AppEvent, screen_size: PhysicalSize<u32>) {
-        let AppEvent::KeyboardEvent {
-            event,
-            is_synthetic,
-        } = event;
-
         // TODO: This should not be everywhere?
         let font_size = 16.0;
         let bounds = self
@@ -53,25 +48,38 @@ impl AppHandler for App {
         let max_x = screen_size.width / (bounds.w.ceil() as u32);
         let max_y = screen_size.height / (bounds.h.ceil() as u32);
 
-        if matches!(event.state, ElementState::Pressed) {
-            match event.physical_key {
-                PhysicalKey::Code(KeyCode::KeyH) => {
-                    self.cursor_pos.x = self.cursor_pos.x.saturating_sub(1);
+        match event {
+            AppEvent::KeyboardEvent {
+                event,
+                is_synthetic,
+            } => {
+                if matches!(event.state, ElementState::Pressed) {
+                    match event.physical_key {
+                        PhysicalKey::Code(KeyCode::KeyH) => {
+                            self.cursor_pos.x = self.cursor_pos.x.saturating_sub(1);
+                        }
+                        PhysicalKey::Code(KeyCode::KeyK) => {
+                            self.cursor_pos.y = self.cursor_pos.y.saturating_sub(1);
+                        }
+                        PhysicalKey::Code(KeyCode::KeyL) => {
+                            self.cursor_pos.x = (self.cursor_pos.x + 1).min(max_x);
+                        }
+                        PhysicalKey::Code(KeyCode::KeyJ) => {
+                            self.cursor_pos.y = (self.cursor_pos.y + 1).min(max_y);
+                        }
+                        _ => {}
+                    }
                 }
-                PhysicalKey::Code(KeyCode::KeyK) => {
-                    self.cursor_pos.y = self.cursor_pos.y.saturating_sub(1);
-                }
-                PhysicalKey::Code(KeyCode::KeyL) => {
-                    self.cursor_pos.x = (self.cursor_pos.x + 1).min(max_x);
-                }
-                PhysicalKey::Code(KeyCode::KeyJ) => {
-                    self.cursor_pos.y = (self.cursor_pos.y + 1).min(max_y);
-                }
-                _ => {}
+
+                self.text = format!("Event: is_synthetic is {}, rest: {:?}", is_synthetic, event);
+            }
+            AppEvent::ResizeEvent { new_size } => {
+                self.cursor_pos.x = self.cursor_pos.x.min(max_x);
+                self.cursor_pos.y = self.cursor_pos.y.min(max_y);
+
+                self.text = format!("Event: Resize to {:?}", new_size);
             }
         }
-
-        self.text = format!("Event: is_synthetic is {}, rest: {:?}", is_synthetic, event);
     }
 
     fn render(&mut self, renderer: &mut AppRenderer, screen_size: PhysicalSize<u32>) {

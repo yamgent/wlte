@@ -9,7 +9,10 @@ use winit::{
     window::{Window, WindowId},
 };
 
-use super::renderer::{AppRenderer, BaseAppRenderer};
+use super::{
+    renderer::{AppRenderer, BaseAppRenderer},
+    Size,
+};
 
 pub trait AppHandler {
     fn handle_events(&mut self, event: AppEvent, screen_size: PhysicalSize<u32>);
@@ -19,6 +22,7 @@ pub trait AppHandler {
 #[derive(Debug)]
 pub enum AppEvent {
     KeyboardEvent { event: KeyEvent, is_synthetic: bool },
+    ResizeEvent { new_size: Size<u32> },
 }
 
 struct ActiveAppState {
@@ -103,6 +107,17 @@ impl<T: AppHandler> ApplicationHandler for BaseApp<T> {
             WindowEvent::Resized(size) => {
                 self.renderer
                     .resize_surface(&mut active_state.surface, &size);
+
+                let screen_size = Size {
+                    w: size.width,
+                    h: size.height,
+                };
+                self.handler.handle_events(
+                    AppEvent::ResizeEvent {
+                        new_size: screen_size,
+                    },
+                    size,
+                );
             }
             WindowEvent::RedrawRequested => {
                 self.renderer.start_new_frame();
