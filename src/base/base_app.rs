@@ -3,7 +3,7 @@ use std::sync::Arc;
 use vello::util::RenderSurface;
 use winit::{
     application::ApplicationHandler,
-    dpi::{LogicalSize, PhysicalSize},
+    dpi::LogicalSize,
     event::{KeyEvent, WindowEvent},
     event_loop::{ActiveEventLoop, EventLoop},
     window::{Window, WindowId},
@@ -15,8 +15,8 @@ use super::{
 };
 
 pub trait AppHandler {
-    fn handle_events(&mut self, event: AppEvent, screen_size: PhysicalSize<u32>);
-    fn render(&mut self, renderer: &mut AppRenderer, screen_size: PhysicalSize<u32>);
+    fn handle_events(&mut self, event: AppEvent, screen_size: Size<u32>);
+    fn render(&mut self, renderer: &mut AppRenderer, screen_size: Size<u32>);
 }
 
 #[derive(Debug)]
@@ -97,10 +97,10 @@ impl<T: AppHandler> ApplicationHandler for BaseApp<T> {
             _ => return,
         };
 
-        let surface_size = PhysicalSize::new(
-            active_state.surface.config.width,
-            active_state.surface.config.height,
-        );
+        let surface_size = Size {
+            w: active_state.surface.config.width,
+            h: active_state.surface.config.height,
+        };
 
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
@@ -112,11 +112,12 @@ impl<T: AppHandler> ApplicationHandler for BaseApp<T> {
                     w: size.width,
                     h: size.height,
                 };
+
                 self.handler.handle_events(
                     AppEvent::ResizeEvent {
                         new_size: screen_size,
                     },
-                    size,
+                    screen_size,
                 );
             }
             WindowEvent::RedrawRequested => {

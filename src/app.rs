@@ -6,14 +6,13 @@ use vello::{
     peniko::{Brush, Color, Fill},
 };
 use winit::{
-    dpi::PhysicalSize,
     event::ElementState,
     keyboard::{KeyCode, PhysicalKey},
 };
 
 use crate::base::{
     AppContext, AppEvent, AppFont, AppHandler, AppRenderer, DrawFillRectangleOptions,
-    DrawTextOptions, Position,
+    DrawTextOptions, Position, Size,
 };
 
 const APP_NAME: &str = env!("CARGO_PKG_NAME");
@@ -38,15 +37,15 @@ pub struct App {
 }
 
 impl AppHandler for App {
-    fn handle_events(&mut self, event: AppEvent, screen_size: PhysicalSize<u32>) {
+    fn handle_events(&mut self, event: AppEvent, screen_size: Size<u32>) {
         // TODO: This should not be everywhere?
         let font_size = 16.0;
         let bounds = self
             .monospace_font
             .variations(&[])
             .measure_text(font_size, "~");
-        let max_x = screen_size.width / (bounds.w.ceil() as u32);
-        let max_y = screen_size.height / (bounds.h.ceil() as u32);
+        let max_x = screen_size.w / (bounds.w.ceil() as u32);
+        let max_y = screen_size.h / (bounds.h.ceil() as u32);
 
         match event {
             AppEvent::KeyboardEvent {
@@ -82,7 +81,7 @@ impl AppHandler for App {
         }
     }
 
-    fn render(&mut self, renderer: &mut AppRenderer, screen_size: PhysicalSize<u32>) {
+    fn render(&mut self, renderer: &mut AppRenderer, screen_size: Size<u32>) {
         let font_size = 16.0;
 
         let bounds = self
@@ -100,7 +99,7 @@ impl AppHandler for App {
             fill_color: Color::rgb(0.0, 1.0, 0.0),
         });
 
-        let total_tildes = (screen_size.height as f64 / font_height).ceil() as usize;
+        let total_tildes = (screen_size.h as f64 / font_height).ceil() as usize;
 
         renderer.draw_text(DrawTextOptions::<&Brush, _, _> {
             font: &self.monospace_font,
