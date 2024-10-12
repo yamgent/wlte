@@ -2,8 +2,10 @@ mod app;
 mod base;
 mod editor;
 
+use anyhow::Result;
+
 use app::App;
 
-pub fn run() {
-    App::run().expect("fatal app error");
+pub fn run() -> Result<()> {
+    App::run()
 }
