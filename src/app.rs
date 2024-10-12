@@ -71,8 +71,7 @@ impl AppHandler for App {
             }
         }
 
-        // self.text = format!("Event: is_synthetic is {}, rest: {:?}", is_synthetic, event);
-        self.text = format!("{} {} {} {}", bounds.w, screen_size.width, max_x, max_y);
+        self.text = format!("Event: is_synthetic is {}, rest: {:?}", is_synthetic, event);
     }
 
     fn render(&mut self, renderer: &mut AppRenderer, screen_size: PhysicalSize<u32>) {
