@@ -1,15 +1,15 @@
 use std::{marker::PhantomData, num::NonZeroUsize, sync::Arc};
 use vello::{
-    glyph::{skrifa::MetadataProvider, Glyph},
-    kurbo::Affine,
-    peniko::{BrushRef, Color, Font, StyleRef},
+    glyph::Glyph,
+    kurbo::{Affine, Rect},
+    peniko::{BrushRef, Color, Fill, StyleRef},
     util::{RenderContext, RenderSurface},
     wgpu::{Maintain, PresentMode},
     AaConfig, AaSupport, RenderParams, Renderer, RendererOptions, Scene,
 };
 use winit::{dpi::PhysicalSize, window::Window};
 
-use super::font;
+use super::{font::get_font, AppFont};
 
 fn create_vello_renderer(context: &RenderContext, surface: &RenderSurface) -> Renderer {
     Renderer::new(
@@ -30,8 +30,6 @@ pub struct BaseAppRenderer {
     // reuse scene every frame, so that we don't spend resources
     // recreating it every frame
     scene: Scene,
-
-    monospace_font: Font,
 }
 
 impl BaseAppRenderer {
@@ -40,7 +38,6 @@ impl BaseAppRenderer {
             context: RenderContext::new(),
             renderers: vec![],
             scene: Scene::new(),
-            monospace_font: font::load_monospace_font(),
         }
     }
 
@@ -110,12 +107,13 @@ impl BaseAppRenderer {
     }
 }
 
-pub struct DrawMonospaceTextOptions<'a, B, S, T>
+pub struct DrawTextOptions<'a, B, S, T>
 where
     B: Into<BrushRef<'a>>,
     S: Into<StyleRef<'a>>,
     T: AsRef<str>,
 {
+    pub font: &'a AppFont,
     pub size: f32,
     pub transform: Affine,
     pub glyph_transform: Option<Affine>,
@@ -123,6 +121,14 @@ where
     pub style: S,
     pub text: T,
     pub _marker: PhantomData<&'a ()>,
+}
+
+pub struct DrawFillRectangleOptions {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+    pub fill_color: Color,
 }
 
 pub struct AppRenderer<'a>(&'a mut BaseAppRenderer);
@@ -134,32 +140,43 @@ impl<'a> From<&'a mut BaseAppRenderer> for AppRenderer<'a> {
 }
 
 impl<'ar> AppRenderer<'ar> {
-    pub fn draw_monospace_text<'a, B, S, T>(
-        &'a mut self,
-        options: DrawMonospaceTextOptions<'a, B, S, T>,
-    ) where
+    pub fn draw_fill_rectangle(&mut self, options: DrawFillRectangleOptions) {
+        let rect = Rect::new(
+            options.x,
+            options.y,
+            options.x + options.width,
+            options.y + options.height,
+        );
+
+        self.0.scene.fill(
+            Fill::NonZero,
+            Affine::IDENTITY,
+            options.fill_color,
+            None,
+            &rect,
+        );
+    }
+
+    pub fn draw_text<'a, B, S, T>(&'a mut self, options: DrawTextOptions<'a, B, S, T>)
+    where
         B: Into<BrushRef<'a>>,
         S: Into<StyleRef<'a>>,
         T: AsRef<str>,
     {
-        let font_ref = font::to_font_ref(&self.0.monospace_font).expect("cannot get font ref");
-
-        let axes = font_ref.axes();
-        let font_size = vello::skrifa::instance::Size::new(options.size);
         // TODO: Support customising font axes
         let variations: &[(&str, f32)] = &[];
-        let var_loc = axes.location(variations.iter().copied());
-        let metrics = font_ref.metrics(font_size, &var_loc);
-        let line_height = metrics.ascent - metrics.descent + metrics.leading;
-        let charmap = font_ref.charmap();
-        let glyph_metrics = font_ref.glyph_metrics(font_size, &var_loc);
+
+        let variations = options.font.variations(variations);
+
+        let font_glyphs = variations.glyphs();
+        let font_metrics = variations.metrics(options.size);
 
         let mut pen_x = 0f32;
         let mut pen_y = 0f32;
 
         self.0
             .scene
-            .draw_glyphs(&self.0.monospace_font)
+            .draw_glyphs(get_font(options.font))
             .font_size(options.size)
             .transform(options.transform)
             .glyph_transform(options.glyph_transform)
@@ -169,13 +186,13 @@ impl<'ar> AppRenderer<'ar> {
                 options.style,
                 options.text.as_ref().chars().filter_map(|ch| {
                     if ch == '\n' {
-                        pen_y += line_height;
+                        pen_y += font_metrics.glyph_height();
                         pen_x = 0.0;
                         return None;
                     }
 
-                    let gid = charmap.map(ch).unwrap_or_default();
-                    let advance = glyph_metrics.advance_width(gid).unwrap_or_default();
+                    let gid = font_glyphs.glyph(ch);
+                    let advance = font_metrics.glyph_width(gid);
                     let x = pen_x;
                     pen_x += advance;
                     Some(Glyph {
