@@ -12,7 +12,7 @@ use winit::{
 
 use crate::{
     base::{
-        AppContext, AppEvent, AppFont, AppHandler, AppRenderer, DrawFillRectangleOptions,
+        AppContext, AppEvent, AppFont, AppHandler, AppRenderer, Bounds, DrawFillRectangleOptions,
         DrawTextOptions, Position, Size,
     },
     editor::{Buffer, View},
@@ -79,6 +79,13 @@ impl AppHandler for App {
                 self.cursor_pos.x = self.cursor_pos.x.min(max_x);
                 self.cursor_pos.y = self.cursor_pos.y.min(max_y);
 
+                self.view.set_viewport(Bounds {
+                    pos: Position { x: 0, y: 0 },
+                    size: Size {
+                        w: new_size.w,
+                        h: new_size.h,
+                    },
+                });
                 self.text = format!("Event: Resize to {:?}", new_size);
             }
         }
@@ -104,12 +111,8 @@ impl AppHandler for App {
             fill_color: Color::rgb(0.0, 1.0, 0.0),
         });
 
-        self.view.render(
-            renderer,
-            screen_size,
-            &self.monospace_font,
-            self.monospace_font_size,
-        );
+        self.view
+            .render(renderer, &self.monospace_font, self.monospace_font_size);
 
         if self.view.buffer_empty() {
             let total_tildes = (screen_size.h as f64 / font_height).ceil() as usize;
@@ -169,6 +172,10 @@ impl App {
                         }
                     })
                     .unwrap_or_else(|| Buffer::new()),
+                Bounds {
+                    pos: Position { x: 0, y: 0 },
+                    size: Size { w: 1, h: 1 },
+                },
             ),
         })
     }
