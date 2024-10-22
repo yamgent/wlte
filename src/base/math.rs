@@ -16,3 +16,21 @@ pub struct Bounds<T> {
     pub pos: Position<T>,
     pub size: Size<T>,
 }
+
+impl<T: std::ops::Add<Output = T> + Clone + Copy> Bounds<T> {
+    pub fn right(&self) -> T {
+        self.pos.x + self.size.w
+    }
+
+    pub fn left(&self) -> T {
+        self.pos.x
+    }
+
+    pub fn top(&self) -> T {
+        self.pos.y
+    }
+
+    pub fn bottom(&self) -> T {
+        self.pos.y + self.size.h
+    }
+}

@@ -3,7 +3,7 @@ use vello::util::RenderSurface;
 use winit::{
     application::ApplicationHandler,
     dpi::LogicalSize,
-    event::{KeyEvent, WindowEvent},
+    event::{DeviceId, KeyEvent, MouseScrollDelta, TouchPhase, WindowEvent},
     event_loop::{ActiveEventLoop, EventLoop},
     window::{Window, WindowId},
 };
@@ -20,8 +20,18 @@ pub trait AppHandler {
 
 #[derive(Debug)]
 pub enum AppEvent {
-    KeyboardEvent { event: KeyEvent, is_synthetic: bool },
-    ResizeEvent { new_size: Size<u32> },
+    KeyboardEvent {
+        event: KeyEvent,
+        is_synthetic: bool,
+    },
+    MouseWheelEvent {
+        device_id: DeviceId,
+        delta: MouseScrollDelta,
+        phase: TouchPhase,
+    },
+    ResizeEvent {
+        new_size: Size<u32>,
+    },
 }
 
 struct ActiveAppState {
@@ -135,6 +145,21 @@ impl<T: AppHandler> ApplicationHandler for BaseApp<T> {
                     AppEvent::KeyboardEvent {
                         event,
                         is_synthetic,
+                    },
+                    surface_size,
+                );
+                active_state.window.request_redraw();
+            }
+            WindowEvent::MouseWheel {
+                device_id,
+                delta,
+                phase,
+            } => {
+                self.handler.handle_events(
+                    AppEvent::MouseWheelEvent {
+                        device_id,
+                        delta,
+                        phase,
                     },
                     surface_size,
                 );

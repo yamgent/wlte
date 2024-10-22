@@ -5,7 +5,10 @@ use vello::{
     peniko::{Brush, Color, Fill},
 };
 use winit::{
-    event::ElementState,
+    event::{
+        ElementState,
+        MouseScrollDelta::{LineDelta, PixelDelta},
+    },
     keyboard::{KeyCode, PhysicalKey},
 };
 
@@ -50,29 +53,130 @@ impl AppHandler for App {
         let max_y = screen_size.h / (bounds.h.ceil() as u32);
 
         match event {
+            AppEvent::MouseWheelEvent { delta, .. } => {
+                self.text = format!("MouseWheelEvent: {:?}", event);
+                let mut scroll_offset = self.view.scroll_offset();
+
+                match delta {
+                    LineDelta(right, down) => {
+                        scroll_offset.x += bounds.w as f64 * -right as f64;
+                        scroll_offset.y += bounds.h as f64 * -down as f64;
+                    }
+                    PixelDelta(physical_position) => {
+                        scroll_offset.x += physical_position.x;
+                        scroll_offset.y += physical_position.y;
+                    }
+                };
+                self.view.set_scroll_offset(scroll_offset);
+            }
             AppEvent::KeyboardEvent {
                 event,
                 is_synthetic,
             } => {
+                let mut scrolled = false;
                 if matches!(event.state, ElementState::Pressed) {
                     match event.physical_key {
                         PhysicalKey::Code(KeyCode::KeyH) => {
                             self.cursor_pos.x = self.cursor_pos.x.saturating_sub(1);
+                            scrolled = true;
                         }
                         PhysicalKey::Code(KeyCode::KeyK) => {
                             self.cursor_pos.y = self.cursor_pos.y.saturating_sub(1);
+                            scrolled = true;
                         }
                         PhysicalKey::Code(KeyCode::KeyL) => {
-                            self.cursor_pos.x = (self.cursor_pos.x + 1).min(max_x);
+                            self.cursor_pos.x += 1;
+                            scrolled = true;
                         }
                         PhysicalKey::Code(KeyCode::KeyJ) => {
-                            self.cursor_pos.y = (self.cursor_pos.y + 1).min(max_y);
+                            self.cursor_pos.y += 1;
+                            scrolled = true;
+                        }
+                        PhysicalKey::Code(KeyCode::ArrowDown) => {
+                            let mut offset = self.view.scroll_offset();
+                            offset.y += 1.0;
+                            self.view.set_scroll_offset(offset);
+                        }
+                        PhysicalKey::Code(KeyCode::ArrowUp) => {
+                            let mut offset = self.view.scroll_offset();
+                            offset.y -= 1.0;
+                            self.view.set_scroll_offset(offset);
+                        }
+                        PhysicalKey::Code(KeyCode::ArrowLeft) => {
+                            let mut offset = self.view.scroll_offset();
+                            offset.x -= 1.0;
+                            self.view.set_scroll_offset(offset);
+                        }
+                        PhysicalKey::Code(KeyCode::ArrowRight) => {
+                            let mut offset = self.view.scroll_offset();
+                            offset.x += 1.0;
+                            self.view.set_scroll_offset(offset);
                         }
                         _ => {}
                     }
                 }
 
                 self.text = format!("Event: is_synthetic is {}, rest: {:?}", is_synthetic, event);
+
+                // TODO: Feel like this logic should be outside?
+                if scrolled {
+                    let current_cursor_global_bounds = Bounds {
+                        pos: Position {
+                            x: self.cursor_pos.x as f64 * bounds.w as f64,
+                            y: self.cursor_pos.y as f64 * bounds.h as f64,
+                        },
+                        size: Size {
+                            w: bounds.w as f64,
+                            h: bounds.h as f64,
+                        },
+                    };
+
+                    let current_scroll_offset = self.view.scroll_offset();
+                    let current_viewport = self.view.viewport();
+                    let current_viewport = Bounds {
+                        pos: Position {
+                            x: current_viewport.pos.x as f64,
+                            y: current_viewport.pos.y as f64,
+                        },
+                        size: Size {
+                            w: current_viewport.size.w as f64,
+                            h: current_viewport.size.h as f64,
+                        },
+                    };
+
+                    let mut current_scroll_viewport_offset = Bounds {
+                        pos: Position {
+                            x: current_viewport.pos.x + current_scroll_offset.x,
+                            y: current_viewport.pos.y + current_scroll_offset.y,
+                        },
+                        size: current_viewport.size,
+                    };
+                    if current_scroll_viewport_offset.right() <= current_cursor_global_bounds.left()
+                    {
+                        current_scroll_viewport_offset.pos.x = current_cursor_global_bounds.right()
+                            - current_scroll_viewport_offset.size.w;
+                    }
+                    if current_cursor_global_bounds.left() <= current_scroll_viewport_offset.left()
+                    {
+                        current_scroll_viewport_offset.pos.x = current_cursor_global_bounds.left();
+                    }
+                    if current_scroll_viewport_offset.bottom() <= current_cursor_global_bounds.top()
+                    {
+                        current_scroll_viewport_offset.pos.y = current_cursor_global_bounds
+                            .bottom()
+                            - current_scroll_viewport_offset.size.h;
+                    }
+                    if current_cursor_global_bounds.top() <= current_scroll_viewport_offset.top() {
+                        current_scroll_viewport_offset.pos.y = current_cursor_global_bounds.top();
+                    }
+
+                    let new_scroll = Position {
+                        x: current_scroll_viewport_offset.pos.x - current_viewport.pos.x,
+                        y: current_scroll_viewport_offset.pos.y - current_viewport.pos.y,
+                    };
+
+                    self.view.set_scroll_offset(new_scroll);
+                }
             }
             AppEvent::ResizeEvent { new_size } => {
                 self.cursor_pos.x = self.cursor_pos.x.min(max_x);
@@ -100,8 +204,8 @@ impl AppHandler for App {
 
         renderer.draw_fill_rectangle(DrawFillRectangleOptions {
             pos: Position {
-                x: self.cursor_pos.x as f64 * single_space_width,
-                y: self.cursor_pos.y as f64 * font_height,
+                x: self.cursor_pos.x as f64 * single_space_width - self.view.scroll_offset().x,
+                y: self.cursor_pos.y as f64 * font_height - self.view.scroll_offset().y,
             },
             size: Size {
                 w: single_space_width,
