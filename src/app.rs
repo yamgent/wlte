@@ -44,177 +44,218 @@ pub struct App {
 }
 
 #[derive(Clone, Copy, Debug)]
+enum ScrollCommand {
+    Px(f64, f64),
+    Cells(i64, i64),
+}
+
+#[derive(Clone, Copy, Debug)]
 enum Command {
-    // TODO: Move the other commands to this enum as well
-    MoveToStartOfLine,
-    MoveToEndOfLine,
+    MoveCursorLeftWrap,
+    MoveCursorRightWrap,
+    MoveCursorUp,
+    MoveCursorDown,
+    MoveCursorToStartOfLine,
+    MoveCursorToEndOfLine,
+    ScrollView(ScrollCommand),
 }
 
 impl App {
+    fn get_single_cell_size(&self) -> Size<f32> {
+        self.monospace_font
+            .variations(&[])
+            .measure_text(self.monospace_font_size, "~")
+    }
+
     fn execute_command(&mut self, command: Command) {
         match command {
-            Command::MoveToStartOfLine => {
+            Command::MoveCursorLeftWrap => {
+                self.cursor_pos.x = self.cursor_pos.x.saturating_sub(1);
+            }
+            Command::MoveCursorRightWrap => {
+                self.cursor_pos.x = (self.cursor_pos.x + 1).min(
+                    self.view
+                        .line_len_at(self.cursor_pos.y as usize)
+                        .saturating_sub(1) as u32,
+                );
+            }
+            Command::MoveCursorUp => {
+                self.cursor_pos.y = self.cursor_pos.y.saturating_sub(1);
+            }
+            Command::MoveCursorDown => {
+                self.cursor_pos.y = (self.cursor_pos.y + 1).min(self.view.total_lines() as u32 - 1);
+            }
+            Command::MoveCursorToStartOfLine => {
                 self.cursor_pos.x = 0;
             }
-            Command::MoveToEndOfLine => {
+            Command::MoveCursorToEndOfLine => {
                 self.cursor_pos.x = self
                     .view
                     .line_len_at(self.cursor_pos.y as usize)
                     .saturating_sub(1) as u32;
             }
+            Command::ScrollView(ScrollCommand::Px(x_px, y_px)) => {
+                let mut scroll_offset = self.view.scroll_offset();
+                scroll_offset.x += x_px;
+                scroll_offset.y += y_px;
+                self.view.set_scroll_offset(scroll_offset);
+            }
+            Command::ScrollView(ScrollCommand::Cells(x_cell, y_cell)) => {
+                let cell_size = self.get_single_cell_size();
+
+                let mut scroll_offset = self.view.scroll_offset();
+                scroll_offset.x += cell_size.w as f64 * x_cell as f64;
+                scroll_offset.y += cell_size.h as f64 * y_cell as f64;
+                self.view.set_scroll_offset(scroll_offset);
+            }
+        }
+
+        let should_adjust_scroll_wrt_cursor = matches!(
+            command,
+            Command::MoveCursorLeftWrap
+                | Command::MoveCursorRightWrap
+                | Command::MoveCursorUp
+                | Command::MoveCursorDown
+                | Command::MoveCursorToStartOfLine
+                | Command::MoveCursorToEndOfLine
+        );
+
+        if should_adjust_scroll_wrt_cursor {
+            let cell_size = self.get_single_cell_size();
+            let current_cursor_global_bounds = Bounds {
+                pos: Position {
+                    x: self.cursor_pos.x as f64 * cell_size.w as f64,
+                    y: self.cursor_pos.y as f64 * cell_size.h as f64,
+                },
+                size: Size {
+                    w: cell_size.w as f64,
+                    h: cell_size.h as f64,
+                },
+            };
+
+            let current_scroll_offset = self.view.scroll_offset();
+            let current_viewport = self.view.viewport();
+            let current_viewport = Bounds {
+                pos: Position {
+                    x: current_viewport.pos.x as f64,
+                    y: current_viewport.pos.y as f64,
+                },
+                size: Size {
+                    w: current_viewport.size.w as f64,
+                    h: current_viewport.size.h as f64,
+                },
+            };
+
+            let mut current_scroll_viewport_offset = Bounds {
+                pos: Position {
+                    x: current_viewport.pos.x + current_scroll_offset.x,
+                    y: current_viewport.pos.y + current_scroll_offset.y,
+                },
+                size: current_viewport.size,
+            };
+            if current_scroll_viewport_offset.right() <= current_cursor_global_bounds.left() {
+                current_scroll_viewport_offset.pos.x =
+                    current_cursor_global_bounds.right() - current_scroll_viewport_offset.size.w;
+            }
+            if current_cursor_global_bounds.left() <= current_scroll_viewport_offset.left() {
+                current_scroll_viewport_offset.pos.x = current_cursor_global_bounds.left();
+            }
+            if current_scroll_viewport_offset.bottom() <= current_cursor_global_bounds.top() {
+                current_scroll_viewport_offset.pos.y =
+                    current_cursor_global_bounds.bottom() - current_scroll_viewport_offset.size.h;
+            }
+            if current_cursor_global_bounds.top() <= current_scroll_viewport_offset.top() {
+                current_scroll_viewport_offset.pos.y = current_cursor_global_bounds.top();
+            }
+
+            let new_scroll = Position {
+                x: current_scroll_viewport_offset.pos.x - current_viewport.pos.x,
+                y: current_scroll_viewport_offset.pos.y - current_viewport.pos.y,
+            };
+
+            self.view.set_scroll_offset(new_scroll);
         }
     }
 }
 
 impl AppHandler for App {
     fn handle_events(&mut self, event: AppEvent, screen_size: Size<u32>) {
-        let bounds = self
-            .monospace_font
-            .variations(&[])
-            .measure_text(self.monospace_font_size, "~");
+        let bounds = self.get_single_cell_size();
         let max_x = screen_size.w / (bounds.w.ceil() as u32);
         let max_y = screen_size.h / (bounds.h.ceil() as u32);
 
         match event {
             AppEvent::MouseWheelEvent { delta, .. } => {
                 self.text = format!("MouseWheelEvent: {:?}", event);
-                let mut scroll_offset = self.view.scroll_offset();
-
                 match delta {
-                    LineDelta(right, down) => {
-                        scroll_offset.x += bounds.w as f64 * -right as f64;
-                        scroll_offset.y += bounds.h as f64 * -down as f64;
-                    }
-                    PixelDelta(physical_position) => {
-                        scroll_offset.x += physical_position.x;
-                        scroll_offset.y += physical_position.y;
-                    }
+                    LineDelta(right, down) => self.execute_command(Command::ScrollView(
+                        ScrollCommand::Cells(-right as i64, -down as i64),
+                    )),
+                    PixelDelta(physical_position) => self.execute_command(Command::ScrollView(
+                        ScrollCommand::Px(physical_position.x, physical_position.y),
+                    )),
                 };
-                self.view.set_scroll_offset(scroll_offset);
             }
             AppEvent::KeyboardEvent {
                 event,
                 is_synthetic,
             } => {
-                let mut should_adjust_scroll_wrt_cursor = false;
                 if matches!(event.state, ElementState::Pressed) {
-                    match event.physical_key {
-                        PhysicalKey::Code(KeyCode::KeyH) => {
-                            self.cursor_pos.x = self.cursor_pos.x.saturating_sub(1);
-                            should_adjust_scroll_wrt_cursor = true;
-                        }
-                        PhysicalKey::Code(KeyCode::KeyK) => {
-                            self.cursor_pos.y = self.cursor_pos.y.saturating_sub(1);
-                            should_adjust_scroll_wrt_cursor = true;
-                        }
-                        PhysicalKey::Code(KeyCode::KeyL) => {
-                            self.cursor_pos.x += 1;
-                            should_adjust_scroll_wrt_cursor = true;
-                        }
-                        PhysicalKey::Code(KeyCode::KeyJ) => {
-                            self.cursor_pos.y =
-                                (self.cursor_pos.y + 1).min(self.view.total_lines() as u32 - 1);
-                            should_adjust_scroll_wrt_cursor = true;
-                        }
+                    let commands = match event.physical_key {
                         PhysicalKey::Code(KeyCode::ArrowDown) => {
-                            let mut offset = self.view.scroll_offset();
-                            offset.y += 1.0;
-                            self.view.set_scroll_offset(offset);
+                            vec![Command::ScrollView(ScrollCommand::Px(0.0, 1.0))]
                         }
                         PhysicalKey::Code(KeyCode::ArrowUp) => {
-                            let mut offset = self.view.scroll_offset();
-                            offset.y -= 1.0;
-                            self.view.set_scroll_offset(offset);
+                            vec![Command::ScrollView(ScrollCommand::Px(0.0, -1.0))]
                         }
                         PhysicalKey::Code(KeyCode::ArrowLeft) => {
-                            let mut offset = self.view.scroll_offset();
-                            offset.x -= 1.0;
-                            self.view.set_scroll_offset(offset);
+                            vec![Command::ScrollView(ScrollCommand::Px(-1.0, 0.0))]
                         }
                         PhysicalKey::Code(KeyCode::ArrowRight) => {
-                            let mut offset = self.view.scroll_offset();
-                            offset.x += 1.0;
-                            self.view.set_scroll_offset(offset);
+                            vec![Command::ScrollView(ScrollCommand::Px(1.0, 0.0))]
                         }
-                        PhysicalKey::Code(KeyCode::Home) | PhysicalKey::Code(KeyCode::Digit0) => {
-                            self.execute_command(Command::MoveToStartOfLine);
-                            should_adjust_scroll_wrt_cursor = true;
+                        PhysicalKey::Code(KeyCode::Home) => {
+                            vec![Command::MoveCursorToStartOfLine]
                         }
                         PhysicalKey::Code(KeyCode::End) => {
-                            self.execute_command(Command::MoveToEndOfLine);
-                            should_adjust_scroll_wrt_cursor = true;
+                            vec![Command::MoveCursorToEndOfLine]
                         }
-                        _ => match event.text {
-                            Some(ref text) if text == "$" => {
-                                self.execute_command(Command::MoveToEndOfLine);
-                                should_adjust_scroll_wrt_cursor = true;
+                        _ => {
+                            if let Some(ref text) = event.text {
+                                match text.as_ref() {
+                                    "$" => {
+                                        vec![Command::MoveCursorToEndOfLine]
+                                    }
+                                    "0" => {
+                                        vec![Command::MoveCursorToStartOfLine]
+                                    }
+                                    "h" => {
+                                        vec![Command::MoveCursorLeftWrap]
+                                    }
+                                    "j" => {
+                                        vec![Command::MoveCursorDown]
+                                    }
+                                    "k" => {
+                                        vec![Command::MoveCursorUp]
+                                    }
+                                    "l" => {
+                                        vec![Command::MoveCursorRightWrap]
+                                    }
+                                    _ => {
+                                        vec![]
+                                    }
+                                }
+                            } else {
+                                vec![]
                             }
-                            _ => {}
-                        },
-                    }
+                        }
+                    };
+                    commands
+                        .into_iter()
+                        .for_each(|command| self.execute_command(command));
                 }
 
                 self.text = format!("Event: is_synthetic is {}, rest: {:?}", is_synthetic, event);
-
-                // TODO: Feel like this logic should be outside?
-                if should_adjust_scroll_wrt_cursor {
-                    let current_cursor_global_bounds = Bounds {
-                        pos: Position {
-                            x: self.cursor_pos.x as f64 * bounds.w as f64,
-                            y: self.cursor_pos.y as f64 * bounds.h as f64,
-                        },
-                        size: Size {
-                            w: bounds.w as f64,
-                            h: bounds.h as f64,
-                        },
-                    };
-
-                    let current_scroll_offset = self.view.scroll_offset();
-                    let current_viewport = self.view.viewport();
-                    let current_viewport = Bounds {
-                        pos: Position {
-                            x: current_viewport.pos.x as f64,
-                            y: current_viewport.pos.y as f64,
-                        },
-                        size: Size {
-                            w: current_viewport.size.w as f64,
-                            h: current_viewport.size.h as f64,
-                        },
-                    };
-
-                    let mut current_scroll_viewport_offset = Bounds {
-                        pos: Position {
-                            x: current_viewport.pos.x + current_scroll_offset.x,
-                            y: current_viewport.pos.y + current_scroll_offset.y,
-                        },
-                        size: current_viewport.size,
-                    };
-                    if current_scroll_viewport_offset.right() <= current_cursor_global_bounds.left()
-                    {
-                        current_scroll_viewport_offset.pos.x = current_cursor_global_bounds.right()
-                            - current_scroll_viewport_offset.size.w;
-                    }
-                    if current_cursor_global_bounds.left() <= current_scroll_viewport_offset.left()
-                    {
-                        current_scroll_viewport_offset.pos.x = current_cursor_global_bounds.left();
-                    }
-                    if current_scroll_viewport_offset.bottom() <= current_cursor_global_bounds.top()
-                    {
-                        current_scroll_viewport_offset.pos.y = current_cursor_global_bounds
-                            .bottom()
-                            - current_scroll_viewport_offset.size.h;
-                    }
-                    if current_cursor_global_bounds.top() <= current_scroll_viewport_offset.top() {
-                        current_scroll_viewport_offset.pos.y = current_cursor_global_bounds.top();
-                    }
-
-                    let new_scroll = Position {
-                        x: current_scroll_viewport_offset.pos.x - current_viewport.pos.x,
-                        y: current_scroll_viewport_offset.pos.y - current_viewport.pos.y,
-                    };
-
-                    self.view.set_scroll_offset(new_scroll);
-                }
             }
             AppEvent::ResizeEvent { new_size } => {
                 self.cursor_pos.x = self.cursor_pos.x.min(max_x);
