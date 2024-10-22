@@ -39,6 +39,38 @@ pub struct App {
     monospace_font: AppFont,
     monospace_font_size: f32,
     text: String,
+
+    // if current line is shorter than previous line, remember the previous line x pos so that
+    // advancing further will not cause us to lose the x pos
+    //
+    // for example, suppose the cursor is |, and it is currently in this position:
+    //
+    //     The quick brown fox
+    //     jumps over
+    //     the very lazy do|g.
+    //
+    // if we move up a line, the cursor x position will be shifted because "jumps over" is shorter
+    // than "the very lazy dog".
+    //
+    //     The quick brown fox
+    //     jumps over|
+    //     the very lazy dog.
+    //
+    // with the "cursor_previous_line_x_pos" set to the same position as "d|og" and remembered, if
+    // we move the cursor up again, then it would get back to the correct x pos:
+    //
+    //     The quick brown f|ox
+    //     jumps over
+    //     the very lazy dog.
+    //
+    // WITHOUT "cursor_previous_line_x_pos", it would become like this instead:
+    //
+    //     The quick |brown fox
+    //     jumps over
+    //     the very lazy dog.
+    //
+    //  which is undesirable behaviour.
+    cursor_previous_line_x_pos: Option<u32>,
     cursor_pos: Position<u32>,
     view: View,
 }
@@ -57,6 +89,8 @@ enum Command {
     MoveCursorDown,
     MoveCursorToStartOfLine,
     MoveCursorToEndOfLine,
+    MoveCursorUpOneViewPage,
+    MoveCursorDownOneViewPage,
     ScrollView(ScrollCommand),
 }
 
@@ -68,16 +102,32 @@ impl App {
     }
 
     fn execute_command(&mut self, command: Command) {
+        let previous_cursor_pos = self.cursor_pos;
+
         match command {
             Command::MoveCursorLeftWrap => {
-                self.cursor_pos.x = self.cursor_pos.x.saturating_sub(1);
+                if self.cursor_pos.x == 0 {
+                    if self.cursor_pos.y != 0 {
+                        self.cursor_pos.y -= 1;
+                        self.cursor_pos.x = self
+                            .view
+                            .line_len_at(self.cursor_pos.y as usize)
+                            .saturating_sub(1) as u32;
+                    }
+                } else {
+                    self.cursor_pos.x = self.cursor_pos.x - 1;
+                }
             }
             Command::MoveCursorRightWrap => {
-                self.cursor_pos.x = (self.cursor_pos.x + 1).min(
-                    self.view
-                        .line_len_at(self.cursor_pos.y as usize)
-                        .saturating_sub(1) as u32,
-                );
+                if self.cursor_pos.x + 1 >= self.view.line_len_at(self.cursor_pos.y as usize) as u32
+                {
+                    if self.cursor_pos.y + 1 != self.view.total_lines() as u32 {
+                        self.cursor_pos.y += 1;
+                        self.cursor_pos.x = 0;
+                    }
+                } else {
+                    self.cursor_pos.x = self.cursor_pos.x + 1;
+                }
             }
             Command::MoveCursorUp => {
                 self.cursor_pos.y = self.cursor_pos.y.saturating_sub(1);
@@ -93,6 +143,19 @@ impl App {
                     .view
                     .line_len_at(self.cursor_pos.y as usize)
                     .saturating_sub(1) as u32;
+            }
+            Command::MoveCursorUpOneViewPage => {
+                let cell_size = self.get_single_cell_size();
+                self.cursor_pos.y = self
+                    .cursor_pos
+                    .y
+                    .saturating_sub((self.view.viewport().size.h as f32 / cell_size.h) as u32);
+            }
+            Command::MoveCursorDownOneViewPage => {
+                let cell_size = self.get_single_cell_size();
+                self.cursor_pos.y = (self.cursor_pos.y
+                    + (self.view.viewport().size.h as f32 / cell_size.h) as u32)
+                    .min(self.view.total_lines().saturating_sub(1) as u32);
             }
             Command::ScrollView(ScrollCommand::Px(x_px, y_px)) => {
                 let mut scroll_offset = self.view.scroll_offset();
@@ -110,6 +173,32 @@ impl App {
             }
         }
 
+        if matches!(
+            command,
+            Command::MoveCursorUp
+                | Command::MoveCursorDown
+                | Command::MoveCursorUpOneViewPage
+                | Command::MoveCursorDownOneViewPage
+        ) {
+            let current_line_len = self.view.line_len_at(self.cursor_pos.y as usize) as u32;
+
+            if self.cursor_previous_line_x_pos.is_none() {
+                self.cursor_previous_line_x_pos = Some(previous_cursor_pos.x);
+            }
+
+            if self.cursor_pos.x >= current_line_len {
+                self.cursor_pos.x = current_line_len.saturating_sub(1);
+            } else if let Some(prev_pos) = self.cursor_previous_line_x_pos {
+                if prev_pos < current_line_len {
+                    self.cursor_pos.x = prev_pos;
+                } else {
+                    self.cursor_pos.x = current_line_len.saturating_sub(1);
+                }
+            }
+        } else {
+            self.cursor_previous_line_x_pos.take();
+        }
+
         let should_adjust_scroll_wrt_cursor = matches!(
             command,
             Command::MoveCursorLeftWrap
@@ -118,6 +207,8 @@ impl App {
                 | Command::MoveCursorDown
                 | Command::MoveCursorToStartOfLine
                 | Command::MoveCursorToEndOfLine
+                | Command::MoveCursorUpOneViewPage
+                | Command::MoveCursorDownOneViewPage
         );
 
         if should_adjust_scroll_wrt_cursor {
@@ -153,14 +244,14 @@ impl App {
                 },
                 size: current_viewport.size,
             };
-            if current_scroll_viewport_offset.right() <= current_cursor_global_bounds.left() {
+            if current_scroll_viewport_offset.right() <= current_cursor_global_bounds.right() {
                 current_scroll_viewport_offset.pos.x =
                     current_cursor_global_bounds.right() - current_scroll_viewport_offset.size.w;
             }
             if current_cursor_global_bounds.left() <= current_scroll_viewport_offset.left() {
                 current_scroll_viewport_offset.pos.x = current_cursor_global_bounds.left();
             }
-            if current_scroll_viewport_offset.bottom() <= current_cursor_global_bounds.top() {
+            if current_scroll_viewport_offset.bottom() <= current_cursor_global_bounds.bottom() {
                 current_scroll_viewport_offset.pos.y =
                     current_cursor_global_bounds.bottom() - current_scroll_viewport_offset.size.h;
             }
@@ -219,6 +310,12 @@ impl AppHandler for App {
                         }
                         PhysicalKey::Code(KeyCode::End) => {
                             vec![Command::MoveCursorToEndOfLine]
+                        }
+                        PhysicalKey::Code(KeyCode::PageUp) => {
+                            vec![Command::MoveCursorUpOneViewPage]
+                        }
+                        PhysicalKey::Code(KeyCode::PageDown) => {
+                            vec![Command::MoveCursorDownOneViewPage]
                         }
                         _ => {
                             if let Some(ref text) = event.text {
@@ -340,6 +437,7 @@ impl App {
             monospace_font: load_monospace_font(),
             monospace_font_size: 16.0,
             text: "No events yet!".to_string(),
+            cursor_previous_line_x_pos: None,
             cursor_pos: Position { x: 0, y: 0 },
             view: View::new(
                 filepath_arg
