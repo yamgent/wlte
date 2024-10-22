@@ -44,6 +44,18 @@ impl View {
         self.scroll_offset = offset;
     }
 
+    pub fn line_len_at(&self, line: usize) -> usize {
+        buffer_lines(&self.buffer)
+            .iter()
+            .nth(line)
+            .map(|line| line.len())
+            .unwrap_or(0)
+    }
+
+    pub fn total_lines(&self) -> usize {
+        buffer_lines(&self.buffer).len()
+    }
+
     pub fn render(
         &self,
         renderer: &mut AppRenderer,

@@ -43,6 +43,29 @@ pub struct App {
     view: View,
 }
 
+#[derive(Clone, Copy, Debug)]
+enum Command {
+    // TODO: Move the other commands to this enum as well
+    MoveToStartOfLine,
+    MoveToEndOfLine,
+}
+
+impl App {
+    fn execute_command(&mut self, command: Command) {
+        match command {
+            Command::MoveToStartOfLine => {
+                self.cursor_pos.x = 0;
+            }
+            Command::MoveToEndOfLine => {
+                self.cursor_pos.x = self
+                    .view
+                    .line_len_at(self.cursor_pos.y as usize)
+                    .saturating_sub(1) as u32;
+            }
+        }
+    }
+}
+
 impl AppHandler for App {
     fn handle_events(&mut self, event: AppEvent, screen_size: Size<u32>) {
         let bounds = self
@@ -89,7 +112,8 @@ impl AppHandler for App {
                             should_adjust_scroll_wrt_cursor = true;
                         }
                         PhysicalKey::Code(KeyCode::KeyJ) => {
-                            self.cursor_pos.y += 1;
+                            self.cursor_pos.y =
+                                (self.cursor_pos.y + 1).min(self.view.total_lines() as u32 - 1);
                             should_adjust_scroll_wrt_cursor = true;
                         }
                         PhysicalKey::Code(KeyCode::ArrowDown) => {
@@ -112,7 +136,21 @@ impl AppHandler for App {
                             offset.x += 1.0;
                             self.view.set_scroll_offset(offset);
                         }
-                        _ => {}
+                        PhysicalKey::Code(KeyCode::Home) | PhysicalKey::Code(KeyCode::Digit0) => {
+                            self.execute_command(Command::MoveToStartOfLine);
+                            should_adjust_scroll_wrt_cursor = true;
+                        }
+                        PhysicalKey::Code(KeyCode::End) => {
+                            self.execute_command(Command::MoveToEndOfLine);
+                            should_adjust_scroll_wrt_cursor = true;
+                        }
+                        _ => match event.text {
+                            Some(ref text) if text == "$" => {
+                                self.execute_command(Command::MoveToEndOfLine);
+                                should_adjust_scroll_wrt_cursor = true;
+                            }
+                            _ => {}
+                        },
                     }
                 }
 
