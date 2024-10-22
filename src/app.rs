@@ -73,24 +73,24 @@ impl AppHandler for App {
                 event,
                 is_synthetic,
             } => {
-                let mut scrolled = false;
+                let mut should_adjust_scroll_wrt_cursor = false;
                 if matches!(event.state, ElementState::Pressed) {
                     match event.physical_key {
                         PhysicalKey::Code(KeyCode::KeyH) => {
                             self.cursor_pos.x = self.cursor_pos.x.saturating_sub(1);
-                            scrolled = true;
+                            should_adjust_scroll_wrt_cursor = true;
                         }
                         PhysicalKey::Code(KeyCode::KeyK) => {
                             self.cursor_pos.y = self.cursor_pos.y.saturating_sub(1);
-                            scrolled = true;
+                            should_adjust_scroll_wrt_cursor = true;
                         }
                         PhysicalKey::Code(KeyCode::KeyL) => {
                             self.cursor_pos.x += 1;
-                            scrolled = true;
+                            should_adjust_scroll_wrt_cursor = true;
                         }
                         PhysicalKey::Code(KeyCode::KeyJ) => {
                             self.cursor_pos.y += 1;
-                            scrolled = true;
+                            should_adjust_scroll_wrt_cursor = true;
                         }
                         PhysicalKey::Code(KeyCode::ArrowDown) => {
                             let mut offset = self.view.scroll_offset();
@@ -119,7 +119,7 @@ impl AppHandler for App {
                 self.text = format!("Event: is_synthetic is {}, rest: {:?}", is_synthetic, event);
 
                 // TODO: Feel like this logic should be outside?
-                if scrolled {
+                if should_adjust_scroll_wrt_cursor {
                     let current_cursor_global_bounds = Bounds {
                         pos: Position {
                             x: self.cursor_pos.x as f64 * bounds.w as f64,
