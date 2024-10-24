@@ -1,10 +1,9 @@
-use anyhow::Result;
 use std::sync::Arc;
 use vello::util::RenderSurface;
 use winit::{
     application::ApplicationHandler,
     dpi::LogicalSize,
-    event::{KeyEvent, WindowEvent},
+    event::{DeviceId, KeyEvent, MouseScrollDelta, TouchPhase, WindowEvent},
     event_loop::{ActiveEventLoop, EventLoop},
     window::{Window, WindowId},
 };
@@ -21,8 +20,18 @@ pub trait AppHandler {
 
 #[derive(Debug)]
 pub enum AppEvent {
-    KeyboardEvent { event: KeyEvent, is_synthetic: bool },
-    ResizeEvent { new_size: Size<u32> },
+    Keyboard {
+        event: KeyEvent,
+        is_synthetic: bool,
+    },
+    MouseWheel {
+        device_id: DeviceId,
+        delta: MouseScrollDelta,
+        phase: TouchPhase,
+    },
+    Resize {
+        new_size: Size<u32>,
+    },
 }
 
 struct ActiveAppState {
@@ -114,7 +123,7 @@ impl<T: AppHandler> ApplicationHandler for BaseApp<T> {
                 };
 
                 self.handler.handle_events(
-                    AppEvent::ResizeEvent {
+                    AppEvent::Resize {
                         new_size: screen_size,
                     },
                     screen_size,
@@ -133,9 +142,24 @@ impl<T: AppHandler> ApplicationHandler for BaseApp<T> {
                 ..
             } => {
                 self.handler.handle_events(
-                    AppEvent::KeyboardEvent {
+                    AppEvent::Keyboard {
                         event,
                         is_synthetic,
+                    },
+                    surface_size,
+                );
+                active_state.window.request_redraw();
+            }
+            WindowEvent::MouseWheel {
+                device_id,
+                delta,
+                phase,
+            } => {
+                self.handler.handle_events(
+                    AppEvent::MouseWheel {
+                        device_id,
+                        delta,
+                        phase,
                     },
                     surface_size,
                 );
@@ -163,8 +187,8 @@ impl AppContext {
         }
     }
 
-    pub fn run(self, handler: impl AppHandler) -> Result<()> {
-        let event_loop = EventLoop::new()?;
+    pub fn run(self, handler: impl AppHandler) {
+        let event_loop = EventLoop::new().expect("cannot create event loop");
         event_loop
             .run_app(&mut BaseApp {
                 state: self.state,
@@ -173,7 +197,5 @@ impl AppContext {
                 handler,
             })
             .expect("cannot run event loop");
-
-        Ok(())
     }
 }
