@@ -115,7 +115,7 @@ impl App {
                             .saturating_sub(1) as u32;
                     }
                 } else {
-                    self.cursor_pos.x = self.cursor_pos.x - 1;
+                    self.cursor_pos.x -= 1;
                 }
             }
             Command::MoveCursorRightWrap => {
@@ -126,7 +126,7 @@ impl App {
                         self.cursor_pos.x = 0;
                     }
                 } else {
-                    self.cursor_pos.x = self.cursor_pos.x + 1;
+                    self.cursor_pos.x += 1;
                 }
             }
             Command::MoveCursorUp => {
@@ -276,7 +276,7 @@ impl AppHandler for App {
         let max_y = screen_size.h / (bounds.h.ceil() as u32);
 
         match event {
-            AppEvent::MouseWheelEvent {
+            AppEvent::MouseWheel {
                 delta,
                 device_id,
                 phase,
@@ -291,7 +291,7 @@ impl AppHandler for App {
                     )),
                 };
             }
-            AppEvent::KeyboardEvent {
+            AppEvent::Keyboard {
                 event,
                 is_synthetic,
             } => {
@@ -358,7 +358,7 @@ impl AppHandler for App {
 
                 self.text = format!("Event: is_synthetic is {}, rest: {:?}", is_synthetic, event);
             }
-            AppEvent::ResizeEvent { new_size } => {
+            AppEvent::Resize { new_size } => {
                 self.cursor_pos.x = self.cursor_pos.x.min(max_x);
                 self.cursor_pos.y = self.cursor_pos.y.min(max_y);
 

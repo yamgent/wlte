@@ -47,8 +47,7 @@ impl View {
 
     pub fn line_len_at(&self, line: usize) -> usize {
         buffer_lines(&self.buffer)
-            .iter()
-            .nth(line)
+            .get(line)
             .map(|line| line.graphemes(true).count())
             .unwrap_or(0)
     }

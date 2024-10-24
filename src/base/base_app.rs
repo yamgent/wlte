@@ -20,16 +20,16 @@ pub trait AppHandler {
 
 #[derive(Debug)]
 pub enum AppEvent {
-    KeyboardEvent {
+    Keyboard {
         event: KeyEvent,
         is_synthetic: bool,
     },
-    MouseWheelEvent {
+    MouseWheel {
         device_id: DeviceId,
         delta: MouseScrollDelta,
         phase: TouchPhase,
     },
-    ResizeEvent {
+    Resize {
         new_size: Size<u32>,
     },
 }
@@ -123,7 +123,7 @@ impl<T: AppHandler> ApplicationHandler for BaseApp<T> {
                 };
 
                 self.handler.handle_events(
-                    AppEvent::ResizeEvent {
+                    AppEvent::Resize {
                         new_size: screen_size,
                     },
                     screen_size,
@@ -142,7 +142,7 @@ impl<T: AppHandler> ApplicationHandler for BaseApp<T> {
                 ..
             } => {
                 self.handler.handle_events(
-                    AppEvent::KeyboardEvent {
+                    AppEvent::Keyboard {
                         event,
                         is_synthetic,
                     },
@@ -156,7 +156,7 @@ impl<T: AppHandler> ApplicationHandler for BaseApp<T> {
                 phase,
             } => {
                 self.handler.handle_events(
-                    AppEvent::MouseWheelEvent {
+                    AppEvent::MouseWheel {
                         device_id,
                         delta,
                         phase,
