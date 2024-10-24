@@ -1,5 +1,6 @@
 use std::marker::PhantomData;
 
+use unicode_segmentation::UnicodeSegmentation;
 use vello::{
     kurbo::Affine,
     peniko::{Brush, Color, Fill},
@@ -48,7 +49,7 @@ impl View {
         buffer_lines(&self.buffer)
             .iter()
             .nth(line)
-            .map(|line| line.len())
+            .map(|line| line.graphemes(true).count())
             .unwrap_or(0)
     }
 
