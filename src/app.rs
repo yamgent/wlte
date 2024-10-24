@@ -276,8 +276,12 @@ impl AppHandler for App {
         let max_y = screen_size.h / (bounds.h.ceil() as u32);
 
         match event {
-            AppEvent::MouseWheelEvent { delta, .. } => {
-                self.text = format!("MouseWheelEvent: {:?}", event);
+            AppEvent::MouseWheelEvent {
+                delta,
+                device_id,
+                phase,
+            } => {
+                self.text = format!("MouseWheelEvent: {:?} {:?} {:?}", device_id, delta, phase);
                 match delta {
                     LineDelta(right, down) => self.execute_command(Command::ScrollView(
                         ScrollCommand::Cells(-right as i64, -down as i64),
